@@ -1,0 +1,57 @@
+# ============================================================
+#  Keil MDK 构建产物：每次 Build 都会重写，传上去只是垃圾
+#  clone 下来重新 Build 即可再生成
+# ============================================================
+Objects/
+Listings/
+DebugConfig/
+*.o
+*.axf
+*.hex
+*.bin
+*.elf
+*.map
+*.lst
+*.crf
+*.dep
+*.lnp
+*.iex
+*.sct
+*.build_log.htm
+build_log.txt
+
+# Keil 用户级配置：窗口布局、断点、上次打开的文件
+# 这是"本机状态"，多人协作会互相覆盖
+*.uvguix.*
+*.uvoptx
+*.uvopt
+
+# ============================================================
+#  注意：以下内容【故意不忽略】，因为别人 clone 下来要能直接打开工程
+#  - RTE/            Keil Run-Time Environment 的 RTE_Components.h
+#  - *.uvprojx       工程文件本体
+#  - *.c / *.h       源码
+#  - *.docx / *.xlsx 交付文档
+# ============================================================
+
+# Keil RTE 组件的"原始版本"备份（*.base@* 这种后缀）
+*.base@*
+
+# 编辑器 / 操作系统
+.vscode/
+.idea/
+*.bak
+*.tmp
+Thumbs.db
+desktop.ini
+~$*
+
+# 文档生成脚本的中间产物
+__pycache__/
+*.pyc
+_工具/_backup*/
+_工具/_backup_*
+
+# 运行日志（体积会涨）
+日志/
+*.log.txt
