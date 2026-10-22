@@ -18,14 +18,16 @@
 #include "app502.h"
 #include "alert502.h"
 
-typedef struct { int16_t temp10; int16_t grams; const char *name; } scene_t;
+typedef struct { int16_t temp10; int16_t grams; uint16_t dpm; const char *name; } scene_t;
 
 static const scene_t SCENES[] = {
-    { 365, 500, "正常" },
-    { 416, 500, "温度预警(黄)" },
-    { 423, 500, "温度报警(红)" },
-    { 365,  80, "重量预警(黄)" },
-    { 365,  40, "重量报警(红)" },
+    { 365, 500,  60, "正常（滴速 60）" },
+    { 416, 500,  60, "温度偏高 41.6℃ → 黄灯慢闪" },
+    { 423, 500,  60, "温度过高 42.3℃ → 红灯 2Hz + 响 3 秒" },
+    { 365,  80,  60, "重量 80g → 黄灯慢闪" },
+    { 365,  40,  60, "重量 40g → 红灯 2Hz + 响 3 秒" },
+    { 365, 500, 140, "滴速 140 过快 → 红灯 4Hz 快闪" },
+    { 300, 500,  60, "温度过低 30.0℃ → 黄灯慢闪" },
 };
 #define SCENE_N (sizeof(SCENES)/sizeof(SCENES[0]))
 
@@ -55,7 +57,7 @@ int main(void)
         }
 
         s  = &SCENES[idx];
-        lv = alert502_update(s->temp10, 1, s->grams, 1);
+        lv = alert502_update(s->temp10, 1, s->grams, 1, (uint16_t)s->dpm, 1);
 
         /* 每 500ms 打印一次当前等级，便于对照 */
         {

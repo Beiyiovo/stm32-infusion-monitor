@@ -160,7 +160,7 @@ public class MainActivity extends AppCompatActivity {
     private void handleLine(String line) {
         if (line.isEmpty()) return;
 
-        String t = null, w = null, d = null, l = null;
+        String t = null, w = null, d = null, l = null, r = null;
         for (String part : line.split(",")) {
             int eq = part.indexOf('=');
             if (eq <= 0) continue;
@@ -171,10 +171,11 @@ public class MainActivity extends AppCompatActivity {
                 case "W": w = v; break;
                 case "D": d = v; break;
                 case "L": l = v; break;
+                case "R": r = v; break;
             }
         }
 
-        final String ft = t, fw = w, fd = d, fl = l;
+        final String ft = t, fw = w, fd = d, fl = l, fr = r;
         ui.post(() -> {
             if (ft != null) {
                 try { gaugeTemp.setValue(Float.parseFloat(ft)); } catch (Exception ignored) { }
@@ -196,19 +197,33 @@ public class MainActivity extends AppCompatActivity {
                     else if (dpm <= 1f && dropAnim.isRunning()) dropAnim.cancel();
                 } catch (Exception ignored) { }
             }
-            if (fl != null) applyLevel(fl);
+            if (fl != null) applyLevel(fl, fr);
         });
     }
 
-    private void applyLevel(String lv) {
+    /** 报警原因位掩码：1=温度过高 2=温度过低 4=药液将尽 8=滴速过快 */
+    private static String reasonText(String r) {
+        if (r == null) return "";
+        int v;
+        try { v = Integer.parseInt(r); } catch (Exception e) { return ""; }
+        if ((v & 1) != 0) return "温度过高";
+        if ((v & 4) != 0) return "药液将尽";
+        if ((v & 8) != 0) return "滴速过快";
+        if ((v & 2) != 0) return "温度过低";
+        return "";
+    }
+
+    private void applyLevel(String lv, String rs) {
+        String why = reasonText(rs);
+        String tail = why.isEmpty() ? "" : " · " + why;
         switch (lv) {
             case "2":
-                tvState.setText("报警 · 立即处理");
+                tvState.setText("报警" + tail);
                 tvState.setTextColor(Color.WHITE);
                 tvState.setBackgroundColor(0xFFB02A2A);
                 break;
             case "1":
-                tvState.setText("预警 · 请关注");
+                tvState.setText("预警" + tail);
                 tvState.setTextColor(0xFF231A00);
                 tvState.setBackgroundColor(0xFFE8B33A);
                 break;

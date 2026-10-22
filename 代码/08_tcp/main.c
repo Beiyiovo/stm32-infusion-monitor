@@ -86,7 +86,8 @@ int main(void)
 
             raw   = hx711_read_raw();
             grams = (int16_t)hx711_grams(raw);
-            lv    = alert502_update(temp10, temp10 != DS18B20_ERR, grams, raw != HX711_ERR);
+            lv    = alert502_update(temp10, temp10 != DS18B20_ERR, grams, raw != HX711_ERR,
+                             (uint16_t)(drop_rate_dpm() + 0.5f), 1);
 
             printf("[RUN] T=%d.%d W=%d D=%d 等级=%u\r\n",
                    temp10 / 10, temp10 % 10, grams,
