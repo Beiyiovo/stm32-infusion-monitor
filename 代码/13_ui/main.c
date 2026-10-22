@@ -102,9 +102,12 @@ static void draw_panel(void)
     oled_draw_cn(0, 0, "系统面板");
 
     oled_draw_cn(0, 2, "滴速");
-    if (s_ir_seen) snprintf(buf, sizeof(buf), "%4d", (int)(drop_rate_dpm() + 0.5f));
-    else           snprintf(buf, sizeof(buf), "  --");
-    oled_draw_str(36, 3, buf);
+    if (s_ir_seen) {
+        snprintf(buf, sizeof(buf), "%4d", (int)(drop_rate_dpm() + 0.5f));
+        oled_draw_str(36, 3, buf);
+    } else {
+        oled_draw_cn(40, 2, "未接");   /* 红外模块没接：直接写“未接”，比 -- 清楚 */
+    }
 
     oled_draw_cn(0, 4, "称重");
     oled_draw_cn(40, 4, s_hx_ok ? "已连" : "未接");
@@ -256,8 +259,17 @@ static void handle_keys(void)
         return;
     }
 
-    if (e4 == 1 && s_ui == UI_SET) {
-        set_inc();
+    if (e4 == 1) {
+        /* ★ 任何界面都先给一个可见反馈：红黄灯一起亮 250ms
+         *   灯亮了 = 按键硬件没问题；灯不亮 = PA6 没接或按键坏 */
+        printf("[KEY] K4 短按\r\n");
+        led_red(1);
+        led_yellow(1);
+        delay_ms(250);
+        led_red(0);
+        led_yellow(0);
+
+        if (s_ui == UI_SET) set_inc();
     }
 }
 
