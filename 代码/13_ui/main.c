@@ -43,8 +43,8 @@ static uint8_t  s_ir_seen = 0;
 static uint32_t s_t_conv = 0, s_t_send = 0, s_t_draw = 0, s_t_page = 0;
 static uint8_t  s_converting = 0, s_page = 0;
 
-static uint32_t s_k3_down = 0, s_k4_down = 0;
-static uint8_t  s_k3_held = 0, s_k4_held = 0;
+static uint32_t s_k3_down = 0;
+static uint8_t  s_k3_held = 0;
 
 static const char *reason_text(uint8_t r)
 {
@@ -59,6 +59,7 @@ static void draw_run(void)
 {
     char buf[24];
 
+    oled_clear();
     oled_draw_cn(0, 0, "输液监测");
 
     /* 温度 */
@@ -97,6 +98,7 @@ static void draw_panel(void)
 {
     char buf[24];
 
+    oled_clear();
     oled_draw_cn(0, 0, "系统面板");
 
     oled_draw_cn(0, 2, "滴速");
@@ -116,6 +118,7 @@ static void draw_set(void)
     alert_cfg_t *c = alert502_cfg();
     char buf[24];
 
+    oled_clear();
     oled_draw_cn(0, 0, "参数设置");
 
     oled_draw_cn(0, 2, "温度上限");
@@ -168,7 +171,7 @@ static void handle_keys(void)
     uint8_t k  = key_any_just_pressed();
     uint8_t e4 = key4_event();
 
-    if (key3_pressed()) {
+    if (key3_pressed() && s_ui == UI_SET) {
         if (!s_k3_held) { s_k3_held = 1; s_k3_down = millis(); }
         else if ((millis() - s_k3_down) >= 3000) {
             s_k3_held = 0;
@@ -180,20 +183,15 @@ static void handle_keys(void)
         s_k3_held = 0;
     }
 
-    if (key4_pressed()) {
-        if (!s_k4_held) { s_k4_held = 1; s_k4_down = millis(); }
-        else if ((millis() - s_k4_down) >= 3000) {
-            s_k4_held = 0;
-            if (s_hx_ok) {
-                hx711_tare(20);
-                printf("[UI] 去皮完成 offset=%ld\r\n", (long)hx711_get_offset());
-                buzzer(1); delay_ms(80); buzzer(0);
-            } else {
-                printf("[UI] 称重未就绪，无法去皮\r\n");
-            }
+    /* KEY4：短按=设置里 +1；长按=去皮（事件码由 app502 给出：1 短 / 2 长） */
+    if (e4 == 2) {
+        if (s_hx_ok) {
+            hx711_tare(20);
+            printf("[UI] 去皮完成 offset=%ld\r\n", (long)hx711_get_offset());
+            buzzer(1); delay_ms(80); buzzer(0);
+        } else {
+            printf("[UI] 称重未就绪，无法去皮\r\n");
         }
-    } else {
-        s_k4_held = 0;
     }
 
     if (k == 1) {
@@ -306,10 +304,12 @@ int main(void)
             s_hx_ok = (s_raw != HX711_ERR) ? 1 : 0;
             if (s_hx_ok) s_grams = (int16_t)hx711_grams(s_raw);
 
-            s_level  = alert502_update(s_temp10, s_temp_ok, s_grams, s_hx_ok,
-                                       (uint16_t)(drop_rate_dpm() + 0.5f), s_ir_seen);
-            s_reason = alert502_reason();
         }
+
+        /* 告警执行必须每轮跑：LED 闪烁/蜂鸣器计时都在里面 */
+        s_level  = alert502_update(s_temp10, s_temp_ok, s_grams, s_hx_ok,
+                                   (uint16_t)(drop_rate_dpm() + 0.5f), s_ir_seen);
+        s_reason = alert502_reason();
 
         handle_keys();
 

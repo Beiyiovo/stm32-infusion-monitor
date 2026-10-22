@@ -173,9 +173,13 @@ int main(void)
 
             s_raw    = hx711_read_raw();
             s_grams  = (int16_t)hx711_grams(s_raw);
-            s_level  = alert502_update(s_temp10, s_temp10 != DS18B20_ERR,
-                                       s_grams, s_raw != HX711_ERR,
-                                       (uint16_t)(drop_rate_dpm() + 0.5f), 1);
+        }
+
+        /* 告警执行每轮都跑：LED 2Hz 闪烁与蜂鸣器计时都在里面 */
+        s_level = alert502_update(s_temp10, s_temp10 != DS18B20_ERR,
+                                  s_grams, s_raw != HX711_ERR,
+                                  (uint16_t)(drop_rate_dpm() + 0.5f), 1);
+        {
 
             if ((millis() - s_t_print) >= 2000) {
                 s_t_print = millis();

@@ -70,6 +70,8 @@ int main(void)
     while (1) {
         /* 1) 滴速结算 + 网络收包 */
         drop_tick();
+        lv = alert502_update(temp10, temp10 != DS18B20_ERR, grams, raw != HX711_ERR,
+                             (uint16_t)(drop_rate_dpm() + 0.5f), 1);
         report_poll();
 
         /* 2) 温度：非阻塞（★ ds18b20_get() 会阻塞约 800ms，期间滴速中断与网络收包都会漏）
@@ -86,8 +88,7 @@ int main(void)
 
             raw   = hx711_read_raw();
             grams = (int16_t)hx711_grams(raw);
-            lv    = alert502_update(temp10, temp10 != DS18B20_ERR, grams, raw != HX711_ERR,
-                             (uint16_t)(drop_rate_dpm() + 0.5f), 1);
+            /* 告警执行挪到循环里（见下面 while 内），这里只更新数据 */
 
             printf("[RUN] T=%d.%d W=%d D=%d 等级=%u\r\n",
                    temp10 / 10, temp10 % 10, grams,
