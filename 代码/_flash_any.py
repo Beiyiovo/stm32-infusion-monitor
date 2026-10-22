@@ -117,30 +117,17 @@ FROMELF = _find_fromelf()
 BAUDS = [38400, 19200, 9600, 115200, 57600, 4800]
 
 DESC = {
-    "01_uart":      "环境验证（串口打印 + LED 心跳）",
-    "02_esp_link":  "STM32 <-> ESP32-C3 无线链路",
-    "03_i2c_scan":  "★ I2C 扫描（验证传感器接线）",
-    "04_oled":      "OLED 显示验证",
-    "05_ds18b20":   "温度采集验证",
-    "06_mpu6050":   "加速度 + 计步验证",
-    "07_max30102":  "心率 + 血氧验证",
-    "08_alert":     "蜂鸣器 + LED + 按键验证",
-    "09_main":      "★ 完整主程序（最终版）",
-    "10_i2c_debug": "I2C 硬件诊断",
-    "11_oled_test": "OLED 硬件测试（软件I2C）",
-    "12_wire_test": "接线通断测试",
-    "13_oled_force":"强制点亮 OLED",
-    "14_max_test":  "MAX30102 诊断",
-    "15_i2c_hunt":  "I2C 终极排查",
-    "16_i2c_scope": "★ 软件示波器式 I2C 诊断",
-    "17_led_test":  "★★ 最简单的 LED 测试（只用板载LED）",
-    "18_oled_display": "★★★ OLED 综合显示测试（带错误检测）",
-    "19_oled_cn":     "★★★ OLED 中文显示（16x16汉字）",
-    "20_all_scan":    "★★★ 三模块扫描 + OLED中文（★ 现在烧这个）",
-    "21_main_debug":  "★★★ 完整版调试模式（OLED显示全部原始值）",
-    "22_max_diag":    "★★★ MAX30102 专项诊断（串口输出）",
-    "24_key_test":  "★ 按键硬件测试（判断接线问题）",
-    "23_hr_debug":    "★★★ 心率算法内部状态诊断",
+    "01_uart":     "环境验证（串口打印 + 心跳）",
+    "02_oled":     "OLED 显示（I2C，需 4.7k 上拉）",
+    "03_ds18b20":  "DS18B20 温度采集",
+    "04_key":      "4 个按键测试",
+    "05_alert":    "两级告警（黄/红 + 蜂鸣器）",
+    "06_hx711":    "HX711 称重（需称重传感器）",
+    "07_drop":     "红外数滴（滴速）",
+    "08_tcp":      "WiFi + TCP 上报（需 ESP32）",
+    "09_main":     "★ 整机固件（三传感器 + 告警 + 上报）",
+    "10_selftest": "★★ 接线自检（不用称重传感器，先烧这个）",
+    "11_calib":    "★ 称重标定（零点 / 换算系数）",
 }
 
 
@@ -496,7 +483,23 @@ if ok:
     print("       1. BOOT0 跳线帽拨回【0】")
     print("       2. 按一下复位键")
     print()
-    print("  ★ 然后双击 serial.bat 看串口打印")
+    # ★ 2026-10-22 新增：烧完直接进串口助手，省一次双击
+    try:
+        ans = input("  要不要现在打开串口助手看输出？(回车=是 / n=否): ").strip().lower()
+    except EOFError:
+        ans = "n"
+    if ans != "n":
+        mon = os.path.join(BASE, "_serial_mon.py")
+        if os.path.exists(mon):
+            print()
+            print("  → 正在打开串口助手（Ctrl+C 退出）...")
+            print(LINE)
+            try:
+                subprocess.run([sys.executable, mon])
+            except KeyboardInterrupt:
+                pass
+        else:
+            print("  （没找到 _serial_mon.py，请手动双击 serial.bat）")
 else:
     print("  X 烧录失败")
     print(LINE)
