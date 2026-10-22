@@ -61,36 +61,36 @@ static void draw_run(void)
 
     oled_draw_cn(0, 0, "输液监测");
 
+    /* 温度 */
+    oled_draw_cn(0, 2, "温度");
     if (s_temp_ok)
-        snprintf(buf, sizeof(buf), "T: %2d.%d C ", s_temp10 / 10, (s_temp10 % 10 + 10) % 10);
+        snprintf(buf, sizeof(buf), "%2d.%d C ", s_temp10 / 10, (s_temp10 % 10 + 10) % 10);
     else
-        snprintf(buf, sizeof(buf), "T:  --.- C ");
-    oled_draw_str(0, 2, buf);
+        snprintf(buf, sizeof(buf), " --.- C ");
+    oled_draw_str(36, 3, buf);
 
+    /* 重量 */
+    oled_draw_cn(0, 4, "重量");
     if (s_hx_ok) {
         int32_t g10 = hx711_grams_x10(s_raw);
-        snprintf(buf, sizeof(buf), "W:%4ld.%ld g", (long)(g10 / 10), (long)((g10 % 10 + 10) % 10));
+        snprintf(buf, sizeof(buf), "%4ld.%ld g", (long)(g10 / 10), (long)((g10 % 10 + 10) % 10));
     } else {
-        snprintf(buf, sizeof(buf), "W:  ---- g");
+        snprintf(buf, sizeof(buf), "  ---- g");
     }
-    oled_draw_str(0, 3, buf);
+    oled_draw_str(36, 5, buf);
 
-    if (s_ir_seen)
-        snprintf(buf, sizeof(buf), "D:%4d dpm", (int)(drop_rate_dpm() + 0.5f));
-    else
-        snprintf(buf, sizeof(buf), "D:  --- dpm");
-    oled_draw_str(0, 4, buf);
-
-    if (s_level == AL_ALARM)     snprintf(buf, sizeof(buf), "!! %s", reason_text(s_reason));
-    else if (s_level == AL_WARN) snprintf(buf, sizeof(buf), "!  %s", reason_text(s_reason));
-    else                         snprintf(buf, sizeof(buf), "   OK");
-    oled_draw_str(0, 5, buf);
-
-    if (alert502_is_muted())      oled_draw_str(0, 6, "MUTE 10min   ");
-    else if (s_level != AL_OK)    oled_draw_str(0, 6, "ALARMING     ");
-    else                          oled_draw_str(0, 6, "             ");
-
-    oled_draw_str(0, 7, "K1:PANEL K2:MUTE");
+    /* 状态（第四行，中文） */
+    if (s_level == AL_ALARM) {
+        oled_draw_cn(0, 6, "报警");
+        oled_draw_cn(40, 6, reason_text(s_reason));
+    } else if (s_level == AL_WARN) {
+        oled_draw_cn(0, 6, "预警");
+        oled_draw_cn(40, 6, reason_text(s_reason));
+    } else if (alert502_is_muted()) {
+        oled_draw_cn(0, 6, "静音");
+    } else {
+        oled_draw_cn(0, 6, "正常");
+    }
 }
 
 static void draw_panel(void)
@@ -99,21 +99,16 @@ static void draw_panel(void)
 
     oled_draw_cn(0, 0, "系统面板");
 
-    oled_draw_str(0, 2, "Ver   2.0");
+    oled_draw_cn(0, 2, "滴速");
+    if (s_ir_seen) snprintf(buf, sizeof(buf), "%4d", (int)(drop_rate_dpm() + 0.5f));
+    else           snprintf(buf, sizeof(buf), "  --");
+    oled_draw_str(36, 3, buf);
 
-    snprintf(buf, sizeof(buf), "TEMP  %s", s_temp_ok ? "OK" : "NG");
-    oled_draw_str(0, 3, buf);
+    oled_draw_cn(0, 4, "称重");
+    oled_draw_cn(40, 4, s_hx_ok ? "已连" : "未接");
 
-    snprintf(buf, sizeof(buf), "HX711 %s", s_hx_ok ? "OK" : "--");
-    oled_draw_str(0, 4, buf);
-
-    snprintf(buf, sizeof(buf), "IR    %s", s_ir_seen ? "OK" : "--");
-    oled_draw_str(0, 5, buf);
-
-    snprintf(buf, sizeof(buf), "NET   %s", s_net_ok ? "OK" : "--");
-    oled_draw_str(0, 6, buf);
-
-    oled_draw_str(0, 7, "K1:BACK K3:SET");
+    oled_draw_cn(0, 6, "网络");
+    oled_draw_cn(40, 6, s_net_ok ? "已连" : "未连");
 }
 
 static void draw_set(void)
@@ -123,20 +118,20 @@ static void draw_set(void)
 
     oled_draw_cn(0, 0, "参数设置");
 
-    snprintf(buf, sizeof(buf), "%cTEMP HI %2d.%dC",
-             s_set_idx == 0 ? '>' : ' ', c->temp_alarm / 10, c->temp_alarm % 10);
-    oled_draw_str(0, 2, buf);
+    oled_draw_cn(0, 2, "温度上限");
+    snprintf(buf, sizeof(buf), "%2d.%dC", c->temp_alarm / 10, c->temp_alarm % 10);
+    oled_draw_str(70, 3, buf);
 
-    snprintf(buf, sizeof(buf), "%cWEIGHT  %3d g",
-             s_set_idx == 1 ? '>' : ' ', c->w_alarm);
-    oled_draw_str(0, 3, buf);
+    oled_draw_cn(0, 4, "重量下限");
+    snprintf(buf, sizeof(buf), "%3d g", c->w_alarm);
+    oled_draw_str(70, 5, buf);
 
-    snprintf(buf, sizeof(buf), "%cRATE   %3d dpm",
-             s_set_idx == 2 ? '>' : ' ', c->rate_high);
-    oled_draw_str(0, 4, buf);
+    oled_draw_cn(0, 6, "滴速上限");
+    snprintf(buf, sizeof(buf), "%3d  ", c->rate_high);
+    oled_draw_str(70, 7, buf);
 
-    oled_draw_str(0, 6, "K3:NEXT K4:+");
-    oled_draw_str(0, 7, "K3 LONG:DEFAULT ");
+    /* 当前选中项右侧画一个指示块 */
+    oled_draw_str(118, (uint8_t)(2 + s_set_idx * 2), ">");
 }
 
 static void set_next(void)
@@ -256,14 +251,12 @@ static void boot_screen(void)
 
     oled_clear();
     oled_draw_cn(0, 0, "开机自检");
-    snprintf(buf, sizeof(buf), "TEMP  %s", s_temp_ok ? "OK " : "NG ");
-    oled_draw_str(0, 2, buf);
-    snprintf(buf, sizeof(buf), "HX711 %s", s_hx_ok ? "OK " : "-- ");
-    oled_draw_str(0, 3, buf);
-    oled_draw_str(0, 4, "IR    -- ");
-    snprintf(buf, sizeof(buf), "NET   %s", s_net_ok ? "OK " : "-- ");
-    oled_draw_str(0, 5, buf);
-    oled_draw_str(0, 7, "v2.0 3s...");
+    oled_draw_cn(0, 2, "温度");
+    oled_draw_cn(40, 2, s_temp_ok ? "通过" : "失败");
+    oled_draw_cn(0, 4, "称重");
+    oled_draw_cn(40, 4, s_hx_ok ? "通过" : "未接");
+    oled_draw_cn(0, 6, "网络");
+    oled_draw_cn(40, 6, s_net_ok ? "通过" : "未连");
     oled_refresh();
 
     printf("[BOOT] TEMP=%d HX711=%d NET=%d\r\n", s_temp_ok, s_hx_ok, s_net_ok);
