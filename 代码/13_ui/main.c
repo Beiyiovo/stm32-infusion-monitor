@@ -60,7 +60,17 @@ static void draw_run(void)
     char buf[24];
 
     oled_clear();
-    oled_draw_cn(0, 0, "输液监测");
+
+    /* 标题行兼做报警条：正常显示标题，报警时直接显示原因 */
+    if (s_level == AL_ALARM) {
+        oled_draw_cn(0, 0, "报警");
+        oled_draw_cn(40, 0, reason_text(s_reason));
+    } else if (s_level == AL_WARN) {
+        oled_draw_cn(0, 0, "预警");
+        oled_draw_cn(40, 0, reason_text(s_reason));
+    } else {
+        oled_draw_cn(0, 0, "输液监测");
+    }
 
     /* 温度 */
     oled_draw_cn(0, 2, "温度");
@@ -80,40 +90,34 @@ static void draw_run(void)
     }
     oled_draw_str(36, 5, buf);
 
-    /* 状态（第四行，中文） */
-    if (s_level == AL_ALARM) {
-        oled_draw_cn(0, 6, "报警");
-        oled_draw_cn(40, 6, reason_text(s_reason));
-    } else if (s_level == AL_WARN) {
-        oled_draw_cn(0, 6, "预警");
-        oled_draw_cn(40, 6, reason_text(s_reason));
-    } else if (alert502_is_muted()) {
-        oled_draw_cn(0, 6, "静音");
+    /* 滴速 */
+    oled_draw_cn(0, 6, "滴速");
+    if (s_ir_seen) {
+        snprintf(buf, sizeof(buf), "%4d   ", (int)(drop_rate_dpm() + 0.5f));
+        oled_draw_str(36, 7, buf);
     } else {
-        oled_draw_cn(0, 6, "正常");
+        oled_draw_cn(40, 6, "未接");
     }
 }
 
 static void draw_panel(void)
 {
-    char buf[24];
-
     oled_clear();
-    oled_draw_cn(0, 0, "系统面板");
+    oled_draw_cn(0, 0, "系统状态");
 
-    oled_draw_cn(0, 2, "滴速");
-    if (s_ir_seen) {
-        snprintf(buf, sizeof(buf), "%4d", (int)(drop_rate_dpm() + 0.5f));
-        oled_draw_str(36, 3, buf);
-    } else {
-        oled_draw_cn(40, 2, "未接");   /* 红外模块没接：直接写“未接”，比 -- 清楚 */
-    }
+    /* 静音 */
+    oled_draw_cn(0, 2, "静音");
+    oled_draw_cn(40, 2, alert502_is_muted() ? "是" : "否");
 
-    oled_draw_cn(0, 4, "称重");
-    oled_draw_cn(40, 4, s_hx_ok ? "已连" : "未接");
+    /* 网络 */
+    oled_draw_cn(0, 4, "网络");
+    oled_draw_cn(40, 4, s_net_ok ? "正常" : "异常");
 
-    oled_draw_cn(0, 6, "网络");
-    oled_draw_cn(40, 6, s_net_ok ? "已连" : "未连");
+    /* 当前状态 */
+    oled_draw_cn(0, 6, "状态");
+    if (s_level == AL_ALARM)      oled_draw_cn(40, 6, "报警");
+    else if (s_level == AL_WARN)  oled_draw_cn(40, 6, "预警");
+    else                          oled_draw_cn(40, 6, "正常");
 }
 
 static void draw_set(void)
