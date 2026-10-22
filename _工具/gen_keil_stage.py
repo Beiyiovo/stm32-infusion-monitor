@@ -40,6 +40,10 @@ STAGES = {
                 ('i2c.c', C + r'\i2c.c'), ('oled.c', C + r'\oled.c'),
                 ('cnfont.c', C + r'\cnfont.c'),
                 ('stm32f10x_exti.c', C + r'\lib\stm32f10x_exti.c')],
+    '10_selftest': [('main.c', r'.\main.c'), ('bsp.c', C + r'\bsp.c'),
+                    ('app502.c', C + r'\app502.c'), ('ds18b20.c', C + r'\ds18b20.c'),
+                    ('i2c.c', C + r'\i2c.c'), ('oled.c', C + r'\oled.c'),
+                    ('cnfont.c', C + r'\cnfont.c')],
 }
 
 FILE_TPL = """            <File>
