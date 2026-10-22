@@ -1,9 +1,13 @@
 package com.example.test;
 
+import android.animation.ObjectAnimator;
+import android.animation.ValueAnimator;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.View;
+import android.view.animation.LinearInterpolator;
 import android.widget.Button;
 import android.widget.TextView;
 
@@ -16,31 +20,34 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 
 /**
- * 502 输液状态监测 —— 手机端
+ * 502 输液状态监测 —— 手机端（炫酷版）
  *
- * 链路：手机连 ESP32 的热点 502-Infusion（密码 12345678）
- *       → 本 App 作为 TCP 客户端连 192.168.4.1:8080
+ * 链路：手机连 ESP32 热点 502-Infusion（密码 12345678）
+ *       → App 作为 TCP 客户端连 192.168.4.1:8080
  *       → STM32 每 2 秒推一行：T=34.2,W=480,D=60,L=0
  *
- * L（报警等级）：0=正常 1=黄色预警 2=红色报警
- *
- * ★ TCP 是字节流，必须按换行符切帧，不能"收到一次算一帧"
+ * L：0=正常 1=黄色预警 2=红色报警
  */
 public class MainActivity extends AppCompatActivity {
 
     private static final String DEFAULT_HOST = "192.168.4.1";
     private static final int    DEFAULT_PORT = 8080;
+    private static final float  MAX_WEIGHT  = 1000f;   // g
+    private static final float  MAX_DRIP    = 120f;    // 滴/分
 
-    private TextView tvConn, tvTemp, tvWeight, tvDrop, tvState;
+    private TextView tvConn, tvWeight, tvDrop, tvState;
+    private GaugeView gaugeTemp;
+    private LevelBarView barWeight;
+    private View barDrop, dotDrop, dotConn;
     private Button btnConnect;
 
     private volatile boolean running = false;
     private volatile boolean connected = false;
-    private Thread netThread = null;
-    private Socket socket = null;
+    private Thread netThread;
+    private Socket socket;
+    private ObjectAnimator dropAnim;
 
     private final Handler ui = new Handler(Looper.getMainLooper());
-
     private String host = DEFAULT_HOST;
     private int port = DEFAULT_PORT;
 
@@ -49,46 +56,50 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        tvConn    = findViewById(R.id.tvConn);
-        tvTemp    = findViewById(R.id.tvTemp);
-        tvWeight  = findViewById(R.id.tvWeight);
-        tvDrop    = findViewById(R.id.tvDrop);
-        tvState   = findViewById(R.id.tvState);
+        tvConn     = findViewById(R.id.tvConn);
+        gaugeTemp  = findViewById(R.id.gaugeTemp);
+        tvWeight   = findViewById(R.id.tvWeight);
+        barWeight  = findViewById(R.id.barWeight);
+        tvDrop     = findViewById(R.id.tvDrop);
+        barDrop    = findViewById(R.id.barDrop);
+        dotDrop    = findViewById(R.id.dotDrop);
+        dotConn    = findViewById(R.id.dotConn);
+        tvState    = findViewById(R.id.tvState);
         btnConnect = findViewById(R.id.btnConnect);
 
-        btnConnect.setOnClickListener(v -> {
-            if (running) {
-                disconnect();
-            } else {
-                startConnect();
-            }
-        });
+        gaugeTemp.setRange(20f, 45f);
+        gaugeTemp.setLabel("液温", "℃");
 
-        // 长按按钮可以改 IP（比如以后换成路由器模式）
+        barWeight.setColors(0xFF2E7DE0, 0xFF35D0BA);
+        barDrop.setPivotX(0f);
+        barDrop.setScaleX(0f);
+
+        // 滴速指示点呼吸动画
+        dropAnim = ObjectAnimator.ofFloat(dotDrop, "alpha", 1f, 0.2f);
+        dropAnim.setDuration(700);
+        dropAnim.setRepeatMode(ValueAnimator.REVERSE);
+        dropAnim.setRepeatCount(ValueAnimator.INFINITE);
+        dropAnim.setInterpolator(new LinearInterpolator());
+
+        btnConnect.setOnClickListener(v -> { if (running) disconnect(); else startConnect(); });
         btnConnect.setOnLongClickListener(v -> {
-            new android.app.AlertDialog.Builder(this)
-                    .setTitle("设置服务器地址")
-                    .setMessage("当前：" + host + ":" + port)
-                    .setPositiveButton("用默认 192.168.4.1:8080", (d, w) -> {
-                        host = DEFAULT_HOST; port = DEFAULT_PORT; updateConnText();
-                    })
-                    .setNegativeButton("关闭", null)
-                    .show();
+            host = DEFAULT_HOST; port = DEFAULT_PORT;
+            updateConnText();
             return true;
         });
     }
 
     private void updateConnText() {
-        ui.post(() -> tvConn.setText(connected
-                ? "已连接 " + host + ":" + port
-                : "未连接  " + host + ":" + port));
+        ui.post(() -> {
+            tvConn.setText(connected ? "已连接" : "未连接");
+            dotConn.setBackgroundResource(connected ? R.drawable.dot_on : R.drawable.dot_off);
+        });
     }
 
     private void startConnect() {
         running = true;
-        btnConnect.setText("断开");
+        btnConnect.setText("断开连接");
         updateConnText();
-
         netThread = new Thread(this::netLoop, "tcp-client");
         netThread.start();
     }
@@ -96,34 +107,33 @@ public class MainActivity extends AppCompatActivity {
     private void disconnect() {
         running = false;
         connected = false;
-        try { if (socket != null) socket.close(); } catch (Exception ignored) {}
+        try { if (socket != null) socket.close(); } catch (Exception ignored) { }
         socket = null;
-        btnConnect.setText("连接 " + host + ":" + port);
+        btnConnect.setText("连接设备");
         updateConnText();
-        ui.post(() -> tvState.setText("待机"));
+        ui.post(() -> {
+            tvState.setText("待机");
+            tvState.setTextColor(0xFF8FA6C4);
+            tvState.setBackgroundResource(R.drawable.card_bg);
+        });
     }
 
-    /** 后台线程：连接 → 读行 → 断线重连 */
     private void netLoop() {
         while (running) {
             try {
                 Socket s = new Socket();
                 s.connect(new InetSocketAddress(host, port), 3000);
-                s.setSoTimeout(5000);
+                s.setSoTimeout(6000);
                 socket = s;
                 connected = true;
                 updateConnText();
 
                 BufferedReader in = new BufferedReader(new InputStreamReader(s.getInputStream(), "UTF-8"));
-                OutputStream out = s.getOutputStream();
+                final OutputStream out = s.getOutputStream();
 
-                // 心跳/请求：每 2 秒发一个字节，兼作 keep-alive
                 Thread hb = new Thread(() -> {
                     while (running && connected) {
-                        try {
-                            out.write("Q\n".getBytes("UTF-8"));
-                            out.flush();
-                        } catch (Exception ignored) { }
+                        try { out.write("Q\n".getBytes("UTF-8")); out.flush(); } catch (Exception ignored) { }
                         try { Thread.sleep(2000); } catch (InterruptedException e) { return; }
                     }
                 }, "tcp-hb");
@@ -134,22 +144,19 @@ public class MainActivity extends AppCompatActivity {
                 while (running && (line = in.readLine()) != null) {
                     handleLine(line.trim());
                 }
-            } catch (Exception e) {
-                // 连不上/断开：1 秒后重试（running 期间）
+            } catch (Exception ignored) {
             } finally {
                 connected = false;
                 updateConnText();
-                try { if (socket != null) socket.close(); } catch (Exception ignored) {}
+                try { if (socket != null) socket.close(); } catch (Exception ignored) { }
                 socket = null;
             }
-
             if (running) {
                 try { Thread.sleep(1000); } catch (InterruptedException e) { return; }
             }
         }
     }
 
-    /** 解析一行：T=34.2,W=480,D=60,L=0 */
     private void handleLine(String line) {
         if (line.isEmpty()) return;
 
@@ -169,9 +176,26 @@ public class MainActivity extends AppCompatActivity {
 
         final String ft = t, fw = w, fd = d, fl = l;
         ui.post(() -> {
-            if (ft != null) tvTemp.setText(ft);
-            if (fw != null) tvWeight.setText(fw);
-            if (fd != null) tvDrop.setText(fd);
+            if (ft != null) {
+                try { gaugeTemp.setValue(Float.parseFloat(ft)); } catch (Exception ignored) { }
+            }
+            if (fw != null) {
+                tvWeight.setText(fw);
+                try {
+                    float g = Float.parseFloat(fw);
+                    barWeight.setPercent(g / MAX_WEIGHT);
+                } catch (Exception ignored) { }
+            }
+            if (fd != null) {
+                tvDrop.setText(fd);
+                try {
+                    float dpm = Float.parseFloat(fd);
+                    float f = Math.min(1f, dpm / MAX_DRIP);
+                    barDrop.setScaleX(f);
+                    if (dpm > 1f && !dropAnim.isRunning()) dropAnim.start();
+                    else if (dpm <= 1f && dropAnim.isRunning()) dropAnim.cancel();
+                } catch (Exception ignored) { }
+            }
             if (fl != null) applyLevel(fl);
         });
     }
@@ -179,19 +203,19 @@ public class MainActivity extends AppCompatActivity {
     private void applyLevel(String lv) {
         switch (lv) {
             case "2":
-                tvState.setText("报警：立即处理");
+                tvState.setText("报警 · 立即处理");
                 tvState.setTextColor(Color.WHITE);
                 tvState.setBackgroundColor(0xFFB02A2A);
                 break;
             case "1":
-                tvState.setText("预警：请关注");
-                tvState.setTextColor(0xFF1A1A1A);
+                tvState.setText("预警 · 请关注");
+                tvState.setTextColor(0xFF231A00);
                 tvState.setBackgroundColor(0xFFE8B33A);
                 break;
             default:
                 tvState.setText("正常");
                 tvState.setTextColor(0xFF7FD1A0);
-                tvState.setBackgroundColor(0xFF16263C);
+                tvState.setBackgroundResource(R.drawable.card_bg);
                 break;
         }
     }
@@ -200,6 +224,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         running = false;
-        try { if (socket != null) socket.close(); } catch (Exception ignored) {}
+        try { if (socket != null) socket.close(); } catch (Exception ignored) { }
+        if (dropAnim != null) dropAnim.cancel();
     }
 }
