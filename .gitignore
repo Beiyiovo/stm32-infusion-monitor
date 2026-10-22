@@ -55,3 +55,10 @@ _工具/_backup_*
 # 运行日志（体积会涨）
 日志/
 *.log.txt
+
+# Android 构建产物
+代码/android/project/.gradle/
+代码/android/project/build/
+代码/android/project/app/build/
+代码/android/project/.idea/
+
