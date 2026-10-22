@@ -65,10 +65,11 @@ BOM = [
      '轻触开关 6x6x5 直插', '2 个', 1, 1,
      '项目1 买 6 个用掉 3 个，本项目要 4 个（设置/加/减/确认），差 1 个。',
      '先用手头剩的 3 个；这 2 个当备份（手感不一致时成套换）'),
-    ('可选', '扩展', '红外对射 / 槽型光耦（做滴速才买）',
-     '槽型光耦 红外对射 计数传感器', '1 个', 5, 15,
-     'A1「滴速」还没定做不做；现在只在引脚表里预留 PB12 + 3P 排针。',
-     '现在别买。等确认做滴速再下单，否则白花钱'),
+    ('★必须', '滴速', '红外对射（分体式：发射 + 接收各一个）',
+     '红外对射 对管 光电传感器 模块 3.3V 5V', '1 套', 5, 15,
+     '滴速是课题要求之一（2026-10-22 导师确认要做）；每落一滴遮断一次光路，靠外部中断计数。',
+     '★必须【分体式】发射+接收各一个 —— 槽型光耦不可用：槽口约 5mm，滴壶直径约 20mm 卡不进去；'
+     '选带比较器的数字输出模块，3.3~5V 供电、输出接 PB12；固定用泡棉+夹子并加遮光罩防环境光'),
     ('可选', '结构', '输液袋挂具/挂钩 + 硬质支架',
      '实验支架 挂钩 输液架 桌面', '1 套', 0, 30,
      '称重必须让袋子垂直受力，不能拿手提着测，否则读数抖到没法看。',
@@ -189,7 +190,7 @@ def build_bom(wb):
     # 合计行
     ws.cell(row=r, column=1, value='')
     ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=7)
-    c = ws.cell(row=r, column=2, value='必买 7 项合计（元）')
+    c = ws.cell(row=r, column=2, value='必买 %d 项合计（元）' % sum(1 for x in BOM if x[0] == '★必须'))
     c.font = F_BOLD
     c.alignment = Alignment(horizontal='right', vertical='center')
     low_sum = sum(x[5] for x in BOM if x[0] == '★必须')
@@ -204,7 +205,7 @@ def build_bom(wb):
     r += 1
 
     ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=7)
-    c = ws.cell(row=r, column=2, value='全 12 项合计（元）')
+    c = ws.cell(row=r, column=2, value='全 %d 项合计（元）' % len(BOM))
     c.font = F_BOLD
     c.alignment = Alignment(horizontal='right', vertical='center')
     for ci, v in ((8, sum(x[5] for x in BOM)), (9, sum(x[6] for x in BOM))):
