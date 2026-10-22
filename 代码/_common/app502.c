@@ -79,7 +79,15 @@ uint8_t key4_pressed(void)
 
 uint8_t key4_event(void)
 {
-    uint8_t e = s_key4_event;
+    uint8_t e;
+
+    /* ★★ 2026-10-22 修：原来这里没调用 key4_scan()，
+     *    而 key4_scan() 只会被 key4_pressed() 调用。
+     *    主程序如果只调 key4_event()（13_ui / 09_main / 04_key 都是这样），
+     *    扫描就永远不会跑 → s_key4_event 永远是 0 → K4 完全没有反应。 */
+    key4_scan();
+
+    e = s_key4_event;
     s_key4_event = 0;
     return e;
 }
