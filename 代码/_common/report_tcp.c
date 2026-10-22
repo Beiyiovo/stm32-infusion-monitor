@@ -39,12 +39,33 @@ static uint8_t at_cmd(const char *cmd, uint32_t timeout_ms)
 /* ==================== 初始化 ==================== */
 uint8_t report_init(void)
 {
+    uint8_t i, ok = 0;
+
     uart2_init();
-    delay_ms(300);
+
+    /* ★ ESP32-C3 上电到 AT 固件就绪要 1~2 秒，等够再发，否则第一条 AT 必然失败 */
+    printf("[NET] 等 ESP32 启动（2s）...\r\n");
+    delay_ms(2000);
     uart2_clear();
 
-    printf("[NET] AT 测试...\r\n");
-    if (!at_cmd("AT", 1000))                       { printf("[NET] AT 无响应\r\n"); return 0; }
+    /* ★ 重试 5 次：冷启动时偶尔还会漏掉第一条 */
+    for (i = 0; i < 5; i++) {
+        if (at_cmd("AT", 600)) { ok = 1; break; }
+        delay_ms(400);
+    }
+
+    if (!ok) {
+        printf("[NET] AT 无响应（试了 5 次）\r\n");
+        printf("       排查：\r\n");
+        printf("       1) ESP32 是否接了 PA2→GPIO6、PA3→GPIO7、GND\r\n");
+        printf("       2) TX/RX 是否交叉（PA2 接模块 RX）\r\n");
+        printf("       3) ESP32 是否烧了 AT 固件（新板可能是空的）\r\n");
+        printf("       4) ESP32 是否已上电（自己的 Type-C）\r\n");
+        printf("       5) GPIO6/GPIO7 是不是 AT 的串口（本项目用 115200）\r\n");
+        if (uart2_available()) printf("       收到过 %u 字节，可能是波特率不对\r\n", uart2_available());
+        return 0;
+    }
+    printf("[NET] AT 正常 ✔\r\n");
 
     printf("[NET] 设为 AP 模式...\r\n");
     if (!at_cmd("AT+CWMODE=2", 2000))              { printf("[NET] CWMODE 失败\r\n"); return 0; }
