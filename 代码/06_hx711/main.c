@@ -29,8 +29,7 @@ int main(void)
     printf("\r\n[BOOT] 502 步骤6 · HX711 称重\r\n");
 
     hx711_init();
-    printf("[HX] 初始化完成，零点=%ld，换算系数=%.3f counts/g\r\n",
-           (long)hx711_get_offset(), hx711_get_scale());
+    printf("[HX] 初始化完成，零点=%ld\r\n", (long)hx711_get_offset());
     printf("[HX] 长按 KEY4 去皮\r\n");
 
     while (1) {
@@ -40,8 +39,10 @@ int main(void)
         if (raw == HX711_ERR) {
             printf("[%lu] 读失败：查供电/共地/DT 是否接 PB11\r\n", (unsigned long)n);
         } else {
-            printf("[%lu] raw=%ld  %.1f g\r\n",
-                   (unsigned long)n, (long)raw, hx711_grams(raw));
+            int32_t g10 = hx711_grams_x10(raw);
+            printf("[%lu] raw=%ld  %ld.%ld g\r\n",
+                   (unsigned long)n, (long)raw,
+                   (long)(g10 / 10), (long)((g10 % 10 + 10) % 10));
         }
 
         /* 长按 KEY4 → 去皮 */

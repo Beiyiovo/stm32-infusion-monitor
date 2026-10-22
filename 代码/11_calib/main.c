@@ -124,11 +124,14 @@ int main(void)
             if (a != 0) {
                 s_scale = (float)(a - s_offset) / (float)s_cal_g;
                 hx711_set_scale(s_scale);
-                printf("[CAL] ★ AVG = %ld, CAL = %d g\r\n", (long)a, s_cal_g);
-                printf("[CAL] ★ SCALE = %.3f counts/g\r\n", (double)s_scale);
-                printf("[CAL] 把这两行抄进代码：\r\n");
-                printf("        hx711_tare() 之后 offset 会自动采；\r\n");
-                printf("        hx711_set_scale(%.3ff);\r\n", (double)s_scale);
+                printf("[CAL] AVG = %ld, CAL = %d g\r\n", (long)a, s_cal_g);
+                {
+                    int32_t milli = (int32_t)(s_scale * 1000.0f + 0.5f);
+                    printf("[CAL] SCALE = %ld.%03ld counts/g\r\n",
+                           (long)(milli / 1000), (long)(milli % 1000));
+                    printf("[CAL] 抄进代码：hx711_set_scale(%ld.%03ldf);\r\n",
+                           (long)(milli / 1000), (long)(milli % 1000));
+                }
                 buzzer(1); delay_ms(120); buzzer(0);
             }
         }

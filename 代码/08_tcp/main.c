@@ -36,7 +36,6 @@ int main(void)
     uint32_t t_read = 0, t_send = 0, t_conv = 0;
     uint8_t  converting = 0;
     char     frame[64];
-
     bsp_init();
     app502_init();
     uart1_init();
@@ -89,15 +88,17 @@ int main(void)
             grams = (int16_t)hx711_grams(raw);
             lv    = alert502_update(temp10, temp10 != DS18B20_ERR, grams, raw != HX711_ERR);
 
-            printf("[RUN] T=%d.%d W=%d D=%.0f 等级=%u\r\n",
-                   temp10 / 10, temp10 % 10, grams, drop_rate_dpm(), lv);
+            printf("[RUN] T=%d.%d W=%d D=%d 等级=%u\r\n",
+                   temp10 / 10, temp10 % 10, grams,
+                   (int)(drop_rate_dpm() + 0.5f), lv);
         }
 
         /* 3) 每 2 秒推一帧给 App（有客户端才发） */
         if ((millis() - t_send) >= 2000) {
             t_send = millis();
-            snprintf(frame, sizeof(frame), "T=%d.%d,W=%d,D=%.0f,L=%d\r\n",
-                     temp10 / 10, temp10 % 10, grams, drop_rate_dpm(), lv);
+            snprintf(frame, sizeof(frame), "T=%d.%d,W=%d,D=%d,L=%d\r\n",
+                     temp10 / 10, temp10 % 10, grams,
+                     (int)(drop_rate_dpm() + 0.5f), lv);
             if (report_send(frame)) {
                 printf("[NET] 已发送: %s", frame);
             }

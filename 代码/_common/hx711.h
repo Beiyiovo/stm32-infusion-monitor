@@ -29,6 +29,7 @@ int32_t hx711_tare(uint16_t samples);       /* 去皮：采 N 次求平均作为
 void    hx711_set_scale(float g_per_count); /* 设置换算系数 */
 float   hx711_get_scale(void);
 float   hx711_grams(int32_t raw);           /* 原始值 → 克（已减零点） */
+int32_t hx711_grams_x10(int32_t raw);       /* 克 ×10 的四舍五入整数（打印用，避免浮点 printf） */
 int32_t hx711_get_offset(void);
 
 #endif /* __HX711_H */

@@ -63,7 +63,7 @@ static void ui_draw_run(void)
     snprintf(buf, sizeof(buf), "W:%4dg   ", s_grams);
     oled_draw_str(0, 4, buf);
 
-    snprintf(buf, sizeof(buf), "D:%4.0fdpm", (double)drop_rate_dpm());
+    snprintf(buf, sizeof(buf), "D:%4ddpm", (int)(drop_rate_dpm() + 0.5f));
     oled_draw_str(0, 5, buf);
 
     oled_draw_str(0, 6, s_level == AL_ALARM ? "** ALARM **" :
@@ -180,8 +180,9 @@ int main(void)
 
             if ((millis() - s_t_print) >= 2000) {
                 s_t_print = millis();
-                printf("[RUN] T=%d.%d W=%d D=%.0f L=%u\r\n",
-                       s_temp10 / 10, s_temp10 % 10, s_grams, drop_rate_dpm(), s_level);
+                printf("[RUN] T=%d.%d W=%d D=%d L=%u\r\n",
+                       s_temp10 / 10, s_temp10 % 10, s_grams,
+                       (int)(drop_rate_dpm() + 0.5f), s_level);
             }
         }
 
@@ -201,8 +202,9 @@ int main(void)
         /* 5) 上报（每 2 秒，有客户端才发） */
         if ((millis() - s_t_send) >= 2000) {
             s_t_send = millis();
-            snprintf(frame, sizeof(frame), "T=%d.%d,W=%d,D=%.0f,L=%d\r\n",
-                     s_temp10 / 10, s_temp10 % 10, s_grams, drop_rate_dpm(), s_level);
+            snprintf(frame, sizeof(frame), "T=%d.%d,W=%d,D=%d,L=%d\r\n",
+                     s_temp10 / 10, s_temp10 % 10, s_grams,
+                     (int)(drop_rate_dpm() + 0.5f), s_level);
             report_send(frame);
         }
 

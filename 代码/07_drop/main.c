@@ -35,10 +35,10 @@ int main(void)
 
         if ((millis() - n) >= 1000) {    /* 每秒打印一次累计 */
             n = millis();
-            printf("[DR] 累计=%lu 滴  本窗口=%u 滴  滴速=%.1f 滴/分\r\n",
+            printf("[DR] 累计=%lu 滴  本窗口=%u 滴  滴速=%d 滴/分\r\n",
                    (unsigned long)drop_total(),
                    drop_window_drops(),
-                   drop_rate_dpm());
+                   (int)(drop_rate_dpm() + 0.5f));
             led_onboard((millis() / 1000) & 1);
         }
 

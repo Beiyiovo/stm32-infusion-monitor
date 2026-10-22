@@ -120,3 +120,12 @@ float hx711_grams(int32_t raw)
     if (raw == HX711_ERR) return 0.0f;
     return ((float)(raw - s_offset)) / s_scale;
 }
+
+/* 克 ×10（四舍五入），给 printf 用整数打印，避免依赖浮点格式化 */
+int32_t hx711_grams_x10(int32_t raw)
+{
+    float g = hx711_grams(raw);
+
+    if (g >= 0.0f) return (int32_t)(g * 10.0f + 0.5f);
+    return (int32_t)(g * 10.0f - 0.5f);
+}
