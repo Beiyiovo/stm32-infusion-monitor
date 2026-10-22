@@ -33,6 +33,13 @@ STAGES = {
                ('i2c.c', C + r'\i2c.c'), ('oled.c', C + r'\oled.c'),
                ('cnfont.c', C + r'\cnfont.c'),
                ('stm32f10x_exti.c', C + r'\lib\stm32f10x_exti.c')],
+    '09_main': [('main.c', r'.\main.c'), ('bsp.c', C + r'\bsp.c'),
+                ('app502.c', C + r'\app502.c'), ('ds18b20.c', C + r'\ds18b20.c'),
+                ('hx711.c', C + r'\hx711.c'), ('drop.c', C + r'\drop.c'),
+                ('alert502.c', C + r'\alert502.c'), ('report_tcp.c', C + r'\report_tcp.c'),
+                ('i2c.c', C + r'\i2c.c'), ('oled.c', C + r'\oled.c'),
+                ('cnfont.c', C + r'\cnfont.c'),
+                ('stm32f10x_exti.c', C + r'\lib\stm32f10x_exti.c')],
 }
 
 FILE_TPL = """            <File>
