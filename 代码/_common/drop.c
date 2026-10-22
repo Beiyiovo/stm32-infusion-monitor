@@ -36,7 +36,11 @@ void drop_init(void)
 
     exti.EXTI_Line    = EXTI_Line12;
     exti.EXTI_Mode    = EXTI_Mode_Interrupt;
+#if DROP_TRIGGER_RISING
+    exti.EXTI_Trigger = EXTI_Trigger_Rising;
+#else
     exti.EXTI_Trigger = EXTI_Trigger_Falling;
+#endif
     exti.EXTI_LineCmd = ENABLE;
     EXTI_Init(&exti);
 

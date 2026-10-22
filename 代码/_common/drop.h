@@ -16,6 +16,13 @@
 #define DROP_WINDOW_MS      10000U      /* 统计窗口：10 秒 */
 #define DROP_DEBOUNCE_MS    30U         /* 两滴最小间隔（≈2000 滴/分，防抖） */
 
+/* ★ 触发沿：模块遮光时输出可能是低、也可能是高，必须实测后选一个
+ *   0 = 下降沿（遮光时 OUT 由高变低）—— 多数槽型光耦是这种
+ *   1 = 上升沿（遮光时 OUT 由低变高）
+ *   判据：上电后串口打印的 [IR] 初始电平；手挡一下看它变成什么，
+ *         若"挡光→变低"就用 0；若"挡光→变高"就用 1。 */
+#define DROP_TRIGGER_RISING 0
+
 void     drop_init(void);               /* PB12 + EXTI12 初始化 */
 void     drop_reset(void);              /* 清计数与窗口 */
 void     drop_tick(void);               /* ★ 主循环必须周期性调用（≥10Hz） */
