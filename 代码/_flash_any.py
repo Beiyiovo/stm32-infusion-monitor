@@ -445,6 +445,18 @@ print()
 ok = False
 used = None
 
+# ★ 2026-10-22 新增：烧录依赖 stm32loader 包，缺了会连试 4 个波特率全是 "No module named"
+try:
+    import stm32loader  # noqa: F401
+except ImportError:
+    print()
+    print("  [X] 缺少 Python 包 stm32loader，无法烧录")
+    print()
+    print("      安装（在同一个 Python 下）：")
+    print("          %s -m pip install stm32loader" % sys.executable)
+    print()
+    sys.exit(1)
+
 # ★ v6.2：先用握手成功的波特率，失败再依次降速
 cands = [good_baud] + [x for x in (38400, 19200, 9600, 4800) if x < good_baud]
 
