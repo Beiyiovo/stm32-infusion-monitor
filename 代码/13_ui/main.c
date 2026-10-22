@@ -231,7 +231,6 @@ static void handle_keys(void)
 
 static void boot_screen(void)
 {
-    char buf[24];
     int16_t t;
 
     oled_clear();
