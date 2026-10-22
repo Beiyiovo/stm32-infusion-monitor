@@ -117,30 +117,60 @@ static void draw_set(void)
 {
     alert_cfg_t *c = alert502_cfg();
     char buf[24];
+    uint8_t i;
+    const int16_t *vals[3] = { &c->temp_alarm, &c->w_alarm, &c->rate_high };
 
     oled_clear();
     oled_draw_cn(0, 0, "参数设置");
+    oled_draw_str(78, 0, "K2- K4+");
 
-    oled_draw_cn(0, 2, "温度上限");
-    snprintf(buf, sizeof(buf), "%2d.%dC", c->temp_alarm / 10, c->temp_alarm % 10);
-    oled_draw_str(70, 3, buf);
+    /* 三行：'>' 光标 + 标签 + 数值 */
+    for (i = 0; i < 3; i++) {
+        uint8_t page = (uint8_t)(2 + i * 2);
 
-    oled_draw_cn(0, 4, "重量下限");
-    snprintf(buf, sizeof(buf), "%3d g", c->w_alarm);
-    oled_draw_str(70, 5, buf);
+        oled_draw_str(0, page, (s_set_idx == i) ? ">" : " ");
 
-    oled_draw_cn(0, 6, "滴速上限");
-    snprintf(buf, sizeof(buf), "%3d  ", c->rate_high);
-    oled_draw_str(70, 7, buf);
-
-    /* 当前选中项右侧画一个指示块 */
-    oled_draw_str(118, (uint8_t)(2 + s_set_idx * 2), ">");
+        if (i == 0) {
+            oled_draw_cn(12, page, "温度上限");
+            snprintf(buf, sizeof(buf), "%2d.%dC", (*vals[0]) / 10, (*vals[0]) % 10);
+        } else if (i == 1) {
+            oled_draw_cn(12, page, "重量下限");
+            snprintf(buf, sizeof(buf), "%4d g", (*vals[1]));
+        } else {
+            oled_draw_cn(12, page, "滴速上限");
+            snprintf(buf, sizeof(buf), "%4d  ", (*vals[2]));
+        }
+        oled_draw_str(84, (uint8_t)(page + 1), buf);
+    }
 }
 
 static void set_next(void)
 {
     s_set_idx = (uint8_t)((s_set_idx + 1) % 3);
     printf("[SET] next idx=%d\r\n", s_set_idx);
+}
+
+static void set_dec(void)
+{
+    alert_cfg_t *c = alert502_cfg();
+
+    switch (s_set_idx) {
+    case 0:
+        c->temp_alarm = (int16_t)(c->temp_alarm - 5);
+        if (c->temp_alarm < 400) c->temp_alarm = 450;
+        c->temp_warn = (int16_t)(c->temp_alarm - 5);
+        break;
+    case 1:
+        c->w_alarm = (int16_t)(c->w_alarm - 10);
+        if (c->w_alarm < 10) c->w_alarm = 200;
+        c->w_warn = (int16_t)(c->w_alarm * 2);
+        break;
+    default:
+        c->rate_high = (int16_t)(c->rate_high - 10);
+        if (c->rate_high < 60) c->rate_high = 200;
+        break;
+    }
+    printf("[SET] temp=%d w=%d rate=%d\r\n", c->temp_alarm, c->w_alarm, c->rate_high);
 }
 
 static void set_inc(void)
@@ -201,6 +231,10 @@ static void handle_keys(void)
     }
 
     if (k == 2) {
+        if (s_ui == UI_SET) {          /* 设置界面里 K2 = 减 */
+            set_dec();
+            return;
+        }
         if (alert502_is_muted()) {
             alert502_mute(0);
             printf("[UI] 取消静音\r\n");
@@ -234,6 +268,15 @@ static void boot_screen(void)
     oled_clear();
     oled_draw_cn(0, 0, "开机自检");
     oled_refresh();
+
+    /* 上电提示：蜂鸣器响 1.2 秒，红黄灯同时亮 */
+    led_red(1);
+    led_yellow(1);
+    buzzer(1);
+    delay_ms(1200);
+    buzzer(0);
+    led_red(0);
+    led_yellow(0);
 
     ds18b20_start();
     delay_ms(800);
