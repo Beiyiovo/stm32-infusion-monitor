@@ -51,7 +51,7 @@ static uint32_t s_t_print  = 0;
 static uint8_t  s_converting = 0;
 
 /* ==================== 显示 ==================== */
-static void ui_draw_run(void)
+static void ui_draw_run_norefresh(void)
 {
     char buf[24];
 
@@ -69,10 +69,9 @@ static void ui_draw_run(void)
     oled_draw_str(0, 6, s_level == AL_ALARM ? "** ALARM **" :
                         (s_level == AL_WARN  ? "!  WARN  ! " : "   OK     "));
     oled_draw_str(0, 7, "K1:SET K2:MUTE");
-    oled_refresh();
 }
 
-static void ui_draw_set(void)
+static void ui_draw_set_norefresh(void)
 {
     char buf[24];
     alert_cfg_t *c = alert502_cfg();
@@ -92,7 +91,6 @@ static void ui_draw_set(void)
     }
     oled_draw_str(0, 6, "K2:-  K3:+");
     oled_draw_str(0, 7, "K4:OK  K1:NEXT");
-    oled_refresh();
 }
 
 /* ==================== 按键 ==================== */
@@ -189,13 +187,22 @@ int main(void)
         /* 3) 按键 */
         handle_keys();
 
-        /* 4) 界面（每 200ms 刷一次，别刷太勤） */
+        /* 4) 界面：重绘只写缓冲区（便宜）；送到屏幕按"一次一页"分摊，
+         *    因为整屏刷新要 ~374ms，会把这期间的滴速中断与网络收包饿死 */
         {
-            static uint32_t last = 0;
-            if ((millis() - last) >= 200) {
-                last = millis();
-                if (s_ui == UI_RUN) ui_draw_run();
-                else                ui_draw_set();
+            static uint32_t last_draw = 0;
+            static uint32_t last_page = 0;
+            static uint8_t  page = 0;
+
+            if ((millis() - last_draw) >= 200) {
+                last_draw = millis();
+                if (s_ui == UI_RUN) ui_draw_run_norefresh();
+                else                ui_draw_set_norefresh();
+            }
+            if ((millis() - last_page) >= 40) {
+                last_page = millis();
+                oled_refresh_page(page);
+                page = (uint8_t)((page + 1) & 7);
             }
         }
 
