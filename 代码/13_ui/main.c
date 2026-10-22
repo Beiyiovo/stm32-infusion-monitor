@@ -256,7 +256,7 @@ static void handle_keys(void)
         return;
     }
 
-    if (e4 == 3 && s_ui == UI_SET) {
+    if (e4 == 1 && s_ui == UI_SET) {
         set_inc();
     }
 }
