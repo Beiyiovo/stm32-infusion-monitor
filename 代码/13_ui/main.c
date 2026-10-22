@@ -263,17 +263,8 @@ static void handle_keys(void)
         return;
     }
 
-    if (e4 == 1) {
-        /* ★ 任何界面都先给一个可见反馈：红黄灯一起亮 250ms
-         *   灯亮了 = 按键硬件没问题；灯不亮 = PA6 没接或按键坏 */
-        printf("[KEY] K4 短按\r\n");
-        led_red(1);
-        led_yellow(1);
-        delay_ms(250);
-        led_red(0);
-        led_yellow(0);
-
-        if (s_ui == UI_SET) set_inc();
+    if (e4 == 1 && s_ui == UI_SET) {
+        set_inc();
     }
 }
 
@@ -285,11 +276,11 @@ static void boot_screen(void)
     oled_draw_cn(0, 0, "开机自检");
     oled_refresh();
 
-    /* 上电提示：蜂鸣器响 1.2 秒，红黄灯同时亮 */
+    /* 上电提示：蜂鸣器响 3 秒，红黄灯同时亮 3 秒 */
     led_red(1);
     led_yellow(1);
     buzzer(1);
-    delay_ms(1200);
+    delay_ms(3000);
     buzzer(0);
     led_red(0);
     led_yellow(0);
