@@ -12,6 +12,9 @@ import android.widget.Button;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -20,25 +23,30 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 
 /**
- * 502 输液状态监测 —— 手机端（炫酷版）
+ * 502 输液状态监测 —— 手机端 v3
  *
- * 链路：手机连 ESP32 热点 502-Infusion（密码 12345678）
- *       → App 作为 TCP 客户端连 192.168.4.1:8080
- *       → STM32 每 2 秒推一行：T=34.2,W=480,D=60,L=0
+ * 主视觉是「剩余药液重量」，其次液温、滴速；带重量趋势图与剩余时间估算。
  *
- * L：0=正常 1=黄色预警 2=红色报警
+ * 链路：手机连 ESP32 热点 502-Infusion（12345678）→ TCP 连 192.168.4.1:8080
+ * 帧格式：T=34.2,W=480,D=60,L=0,R=0
+ *      L：0 正常 / 1 预警 / 2 报警
+ *      R：位掩码 1=温度过高 2=温度过低 4=药液将尽 8=滴速过快
  */
 public class MainActivity extends AppCompatActivity {
 
     private static final String DEFAULT_HOST = "192.168.4.1";
     private static final int    DEFAULT_PORT = 8080;
-    private static final float  MAX_WEIGHT  = 1000f;   // g
-    private static final float  MAX_DRIP    = 120f;    // 滴/分
 
-    private TextView tvConn, tvWeight, tvDrop, tvState;
+    /** 满袋按 500 g 估算（500 ml ≈ 500 g，密度按 1 算） */
+    private static final float  BAG_GRAMS   = 500f;
+    /** 输液器滴系数：20 滴 = 1 ml */
+    private static final float  DROPS_PER_ML = 20f;
+
+    private TextView tvConn, tvWeight, tvPercent, tvEstimate, tvDrop, tvTotal, tvState;
     private GaugeView gaugeTemp;
     private LevelBarView barWeight;
-    private View barDrop, dotDrop, dotConn;
+    private TrendView trend;
+    private View dotDrop, dotConn;
     private Button btnConnect;
 
     private volatile boolean running = false;
@@ -51,30 +59,41 @@ public class MainActivity extends AppCompatActivity {
     private String host = DEFAULT_HOST;
     private int port = DEFAULT_PORT;
 
+    private float lastWeight = -1f;
+    private int   totalDrops = 0;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        /* Android 15+ 强制边到边，必须自己让出状态栏/导航栏 */
+        final View root = findViewById(R.id.root);
+        final int padL = root.getPaddingLeft(), padR = root.getPaddingRight();
+        ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
+            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            v.setPadding(padL, bars.top + 8, padR, bars.bottom + 8);
+            return insets;
+        });
+
         tvConn     = findViewById(R.id.tvConn);
-        gaugeTemp  = findViewById(R.id.gaugeTemp);
         tvWeight   = findViewById(R.id.tvWeight);
-        barWeight  = findViewById(R.id.barWeight);
+        tvPercent  = findViewById(R.id.tvPercent);
+        tvEstimate = findViewById(R.id.tvEstimate);
         tvDrop     = findViewById(R.id.tvDrop);
-        barDrop    = findViewById(R.id.barDrop);
+        tvTotal    = findViewById(R.id.tvTotal);
+        tvState    = findViewById(R.id.tvState);
+        gaugeTemp  = findViewById(R.id.gaugeTemp);
+        barWeight  = findViewById(R.id.barWeight);
+        trend      = findViewById(R.id.trend);
         dotDrop    = findViewById(R.id.dotDrop);
         dotConn    = findViewById(R.id.dotConn);
-        tvState    = findViewById(R.id.tvState);
         btnConnect = findViewById(R.id.btnConnect);
 
         gaugeTemp.setRange(20f, 45f);
-        gaugeTemp.setLabel("液温", "℃");
-
+        gaugeTemp.setLabel("温度", "℃");
         barWeight.setColors(0xFF2E7DE0, 0xFF35D0BA);
-        barDrop.setPivotX(0f);
-        barDrop.setScaleX(0f);
 
-        // 滴速指示点呼吸动画
         dropAnim = ObjectAnimator.ofFloat(dotDrop, "alpha", 1f, 0.2f);
         dropAnim.setDuration(700);
         dropAnim.setRepeatMode(ValueAnimator.REVERSE);
@@ -181,18 +200,18 @@ public class MainActivity extends AppCompatActivity {
                 try { gaugeTemp.setValue(Float.parseFloat(ft)); } catch (Exception ignored) { }
             }
             if (fw != null) {
-                tvWeight.setText(fw);
                 try {
                     float g = Float.parseFloat(fw);
-                    barWeight.setPercent(g / MAX_WEIGHT);
+                    applyWeight(g);
                 } catch (Exception ignored) { }
             }
             if (fd != null) {
-                tvDrop.setText(fd);
                 try {
                     float dpm = Float.parseFloat(fd);
-                    float f = Math.min(1f, dpm / MAX_DRIP);
-                    barDrop.setScaleX(f);
+                    tvDrop.setText(String.format("%.0f", dpm));
+                    /* 帧间隔 2 秒，累加滴数 */
+                    totalDrops += Math.round(dpm * 2f / 60f);
+                    tvTotal.setText("累计 " + totalDrops + " 滴");
                     if (dpm > 1f && !dropAnim.isRunning()) dropAnim.start();
                     else if (dpm <= 1f && dropAnim.isRunning()) dropAnim.cancel();
                 } catch (Exception ignored) { }
@@ -201,7 +220,38 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    /** 报警原因位掩码：1=温度过高 2=温度过低 4=药液将尽 8=滴速过快 */
+    /** 克重是主视觉：数字 + 液位条 + 百分比 + 预计剩余时间 */
+    private void applyWeight(float g) {
+        tvWeight.setText(String.format("%.1f", g));
+
+        float pct = g / BAG_GRAMS;
+        if (pct < 0) pct = 0;
+        if (pct > 1) pct = 1;
+        barWeight.setPercent(pct);
+        tvPercent.setText(String.format("液位 %.0f%%", pct * 100));
+
+        lastWeight = g;
+        trend.add(g);
+        updateEstimate();
+    }
+
+    /** 剩余时间 ≈ 剩余重量(ml) ÷ 当前流速(ml/min)，滴系数按 20 滴/ml */
+    private void updateEstimate() {
+        String dps = tvDrop.getText().toString().replaceAll("[^0-9.]", "");
+        float dpm;
+        try { dpm = Float.parseFloat(dps); } catch (Exception e) { dpm = 0; }
+
+        if (lastWeight < 0 || dpm < 1f) {
+            tvEstimate.setText("预计剩余 --");
+            return;
+        }
+        float mlPerMin = dpm / DROPS_PER_ML;
+        int minutes = (int) (lastWeight / mlPerMin);
+
+        if (minutes >= 60) tvEstimate.setText(String.format("预计剩余 %d 时 %d 分", minutes / 60, minutes % 60));
+        else               tvEstimate.setText(String.format("预计剩余 %d 分", minutes));
+    }
+
     private static String reasonText(String r) {
         if (r == null) return "";
         int v;

@@ -99,13 +99,13 @@ public class GaugeView extends View {
 
         // 文字
         txtLbl.setTextSize(13 * d);
-        c.drawText(label, cx, cy - size * 0.26f, txtLbl);
+        c.drawText(label, cx, cy - size * 0.30f, txtLbl);
 
-        txtVal.setTextSize(size * 0.30f);
+        txtVal.setTextSize(size * 0.26f);
         String vs = Float.isNaN(value) ? "--.-" : String.format("%.1f", value);
-        c.drawText(vs, cx, cy + size * 0.10f, txtVal);
+        c.drawText(vs, cx, cy + size * 0.14f, txtVal);
 
         txtUnit.setTextSize(15 * d);
-        c.drawText(unit, cx, cy + size * 0.26f, txtUnit);
+        c.drawText(unit, cx, cy + size * 0.30f, txtUnit);
     }
 }
