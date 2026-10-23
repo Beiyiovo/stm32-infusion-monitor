@@ -111,7 +111,9 @@ static void draw_panel(void)
 
     /* 网络 */
     oled_draw_cn(0, 4, "网络");
-    oled_draw_cn(40, 4, s_net_ok ? "正常" : "异常");
+    if (!s_net_ok)                  oled_draw_cn(40, 4, "异常");
+    else if (report_connected())    oled_draw_cn(40, 4, "已连");
+    else                            oled_draw_cn(40, 4, "待机");
 
     /* 当前状态 */
     oled_draw_cn(0, 6, "状态");
@@ -307,7 +309,7 @@ static void boot_screen(void)
     oled_refresh();
 
     printf("[BOOT] TEMP=%d HX711=%d NET=%d\r\n", s_temp_ok, s_hx_ok, s_net_ok);
-    delay_ms(2500);
+    delay_ms(1500);
 }
 
 int main(void)

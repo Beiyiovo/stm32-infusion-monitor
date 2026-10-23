@@ -173,14 +173,14 @@ uint8_t report_send(const char *payload)
     uart2_clear();
     uart2_send(cmd);
 
-    /* 等 ESP32 回 '>'（最多 1 秒） */
+    /* 等 ESP32 回 '>'（最多 300ms：实测 10~30ms 就回，1 秒会把主循环卡死） */
     t0 = millis();
-    while ((millis() - t0) < 1000) {
+    while ((millis() - t0) < 300) {
         if (uart2_getc_nonblock(&c)) {
             if (c == '>') break;
         }
     }
-    if ((millis() - t0) >= 1000) {
+    if ((millis() - t0) >= 300) {
         printf("[NET] 等 '>' 超时，发送放弃\r\n");
         s_link = -1;
         return 0;
