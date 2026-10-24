@@ -33,6 +33,25 @@ static uint8_t s_set_idx = 0;
 static int16_t  s_temp10 = 0;
 static uint8_t  s_temp_ok = 0;
 static int32_t  s_raw = 0;
+static int32_t  s_raw_f = 0;            /* 5 点滑动平均后的原始值 */
+
+#define RAW_AVG_N   5
+static int32_t  s_raw_buf[RAW_AVG_N];
+static uint8_t  s_raw_i = 0, s_raw_n = 0;
+
+/* 原始值滑动平均：HX711 单次读数噪声较大，平均后零点更稳 */
+static int32_t raw_smooth(int32_t v)
+{
+    int32_t sum = 0;
+    uint8_t i;
+
+    s_raw_buf[s_raw_i] = v;
+    s_raw_i = (uint8_t)((s_raw_i + 1) % RAW_AVG_N);
+    if (s_raw_n < RAW_AVG_N) s_raw_n++;
+
+    for (i = 0; i < s_raw_n; i++) sum += s_raw_buf[i];
+    return s_raw_n ? (sum / s_raw_n) : v;
+}
 static int16_t  s_grams = 0;
 static uint8_t  s_hx_ok = 0;
 static uint8_t  s_level = AL_OK;
@@ -83,7 +102,7 @@ static void draw_run(void)
     /* 重量 */
     oled_draw_cn(0, 4, "重量");
     if (s_hx_ok) {
-        int32_t g10 = hx711_grams_x10(s_raw);
+        int32_t g10 = hx711_grams_x10(s_raw_f);
         snprintf(buf, sizeof(buf), "%4ld.%ld g", (long)(g10 / 10), (long)((g10 % 10 + 10) % 10));
     } else {
         snprintf(buf, sizeof(buf), "  ---- g");
@@ -296,6 +315,14 @@ static void boot_screen(void)
     s_raw = hx711_read_raw();
     s_hx_ok = (s_raw != HX711_ERR) ? 1 : 0;
 
+    /* ★ 上电自动去皮：否则 offset=0 时重量会显示 raw/scale（比如 764.8 g） */
+    if (s_hx_ok) {
+        hx711_tare(50);
+        s_raw = hx711_read_raw();
+        { uint8_t k; for (k = 0; k < RAW_AVG_N; k++) s_raw_f = raw_smooth(hx711_read_raw()); }
+        printf("[HX] 上电自动去皮，offset=%ld\r\n", (long)hx711_get_offset());
+    }
+
     s_net_ok = report_init() ? 1 : 0;
 
     oled_clear();
@@ -354,7 +381,14 @@ int main(void)
 
             s_raw = hx711_read_raw();
             s_hx_ok = (s_raw != HX711_ERR) ? 1 : 0;
-            if (s_hx_ok) s_grams = (int16_t)hx711_grams(s_raw);
+            if (s_hx_ok) {
+                int32_t g10;
+                s_raw_f = raw_smooth(s_raw);
+                g10 = hx711_grams_x10(s_raw_f);
+                /* 死区：±3 g 以内当作 0，避免静止时数字乱跳 */
+                if (g10 > -30 && g10 < 30) g10 = 0;
+                s_grams = (int16_t)(g10 / 10);
+            }
 
         }
 
@@ -379,9 +413,13 @@ int main(void)
 
         if ((millis() - s_t_send) >= 2000) {
             s_t_send = millis();
-            snprintf(frame, sizeof(frame), "T=%d.%d,W=%d,D=%d,L=%d,R=%d\r\n",
-                     s_temp10 / 10, s_temp10 % 10, s_grams,
-                     (int)(drop_rate_dpm() + 0.5f), s_level, s_reason);
+            {
+                int32_t g10 = s_hx_ok ? hx711_grams_x10(s_raw_f) : 0;
+                snprintf(frame, sizeof(frame), "T=%d.%d,W=%ld.%ld,D=%d,L=%d,R=%d\r\n",
+                         s_temp10 / 10, s_temp10 % 10,
+                         (long)(g10 / 10), (long)((g10 % 10 + 10) % 10),
+                         (int)(drop_rate_dpm() + 0.5f), s_level, s_reason);
+            }
             report_send(frame);
         }
 

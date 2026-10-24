@@ -374,6 +374,12 @@ GitHub 仓库已建并推送 https://github.com/Beiyiovo/stm32-infusion-monitor*
 4. 称重传感器到货 → `06_hx711` / `11_calib` 标定
 5. 面包板全通 → 画 PCB 打样
 
+**⏳ 待办：秤的复标（等砝码）**
+- 当前 `HX711_DEFAULT_SCALE = 802.0f`，是用 500 ml 水（含容器约 510 g）标的 → **读数偏小 2%**
+- 砝码到货后：烧 `11_calib` → 空秤 KEY1 → 放砝码 KEY2 选重量 → KEY4 读数 → 按
+  `新系数 = 802 × (读数 ÷ 砝码真实重量)` 改 `hx711.h` 第 26 行
+- 演示时用砝码（不是水）更权威：可直接说"100 g 标准砝码，显示 99.x g，误差 x%"
+
 **⚠️ 推送 GitHub 依赖 Steam++（Watt Toolkit）**：2026-10-22 19:00 实测 github.com:443 不通，
 本机未找到 Steam++ 进程，已有 2 个本地提交待推。**开机/打开 Watt Toolkit 后再 push**。
 

@@ -444,7 +444,7 @@
               <FileType>1</FileType>
               <FilePath>..\_common\lib\stm32f10x_exti.c</FilePath>
             </File>
-            </Files>
+          </Files>
         </Group>
         <Group>
           <GroupName>::CMSIS</GroupName>

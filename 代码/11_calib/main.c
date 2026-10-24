@@ -32,6 +32,7 @@ static int32_t s_offset = 0;
 static float   s_scale  = 0.0f;
 static int32_t s_raw    = 0;
 static int16_t s_cal_g  = 100;      /* 当前标定用的砝码重量 */
+static int32_t s_zero_prev = 0;     /* 上一次的零点，用于异常检测 */
 
 static int32_t avg_raw(uint16_t n)
 {
@@ -97,27 +98,42 @@ int main(void)
     oled_clear();
 
     while (1) {
+        uint8_t k;
+
         s_raw = hx711_read_raw();
 
+        /* ★ 只读一次：key_any_just_pressed() 读后即清，调两次会丢掉第二个键 */
+        k = key_any_just_pressed();
+
         /* --- KEY1：定零点 --- */
-        if (key_any_just_pressed() == 1) {
+        if (k == 1) {
             printf("[CAL] 采零点中（空载，别碰）...\r\n");
             s_offset = avg_raw(20);
             printf("[CAL] ★ ZERO = %ld\r\n", (long)s_offset);
+            if (s_zero_prev != 0 && (s_offset - s_zero_prev > 100000 || s_zero_prev - s_offset > 100000)) {
+                printf("[CAL] !! 警告：零点比上次差了 %ld counts\r\n",
+                       (long)(s_offset - s_zero_prev));
+                printf("[CAL] !! 秤上是不是还放着东西？这组零点不可用，取下来重新按 KEY1\r\n");
+            }
+            s_zero_prev = s_offset;
             buzzer(1); delay_ms(60); buzzer(0);
         }
 
         /* --- KEY2：切换砝码重量 --- */
-        if (key_any_just_pressed() == 2) {
+        if (k == 2) {
             if      (s_cal_g == 100) s_cal_g = 200;
             else if (s_cal_g == 200) s_cal_g = 500;
             else                     s_cal_g = 100;
             printf("[CAL] 标定重量 → %d g\r\n", s_cal_g);
         }
 
-        /* --- KEY4：定换算系数 --- */
-        if (key4_event() == 1) {
-            int32_t a = avg_raw(20);
+        /* --- KEY4：定换算系数（短按 1 / 长按 2 都接受） --- */
+        {
+            uint8_t e4 = key4_event();
+            if (e4 != 0) {
+                int32_t a;
+                printf("[KEY] KEY4 事件=%u\r\n", e4);
+                a = avg_raw(20);
             if (s_scale == 0.0f && s_offset == 0) {
                 printf("[CAL] 提示：还没定零点，先按 KEY1\r\n");
             }
@@ -133,6 +149,7 @@ int main(void)
                            (long)(milli / 1000), (long)(milli % 1000));
                 }
                 buzzer(1); delay_ms(120); buzzer(0);
+                }
             }
         }
 

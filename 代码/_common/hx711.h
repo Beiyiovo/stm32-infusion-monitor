@@ -19,7 +19,11 @@
 #include "app502.h"
 
 #define HX711_ERR           0x7FFFFFFFL     /* 读失败的返回值 */
-#define HX711_DEFAULT_SCALE 1000.0f         /* 默认换算系数（counts/克），必须实测标定 */
+/* ★ 2026-10-24 实测标定（500 ml 水 ≈ 500 g，11_calib 跑两次）：
+ *      ZERO  = 764832 / 764883
+ *      SCALE = 801.990 与 801.920 counts/g（两次相差 0.07，即 0.009%）
+ *   取中间值 802.0。换传感器或改挂具结构后必须重新标定。 */
+#define HX711_DEFAULT_SCALE 802.0f           /* counts/克（实测标定值） */
 
 void    hx711_init(void);
 uint8_t hx711_ready(void);                  /* 1 = 有数据可读 */

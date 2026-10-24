@@ -98,9 +98,13 @@ int main(void)
         /* 3) 每 2 秒推一帧给 App（有客户端才发） */
         if ((millis() - t_send) >= 2000) {
             t_send = millis();
-            snprintf(frame, sizeof(frame), "T=%d.%d,W=%d,D=%d,L=%d\r\n",
-                     temp10 / 10, temp10 % 10, grams,
-                     (int)(drop_rate_dpm() + 0.5f), lv);
+            {
+                int32_t g10 = (raw != HX711_ERR) ? hx711_grams_x10(raw) : 0;
+                snprintf(frame, sizeof(frame), "T=%d.%d,W=%ld.%ld,D=%d,L=%d\r\n",
+                         temp10 / 10, temp10 % 10,
+                         (long)(g10 / 10), (long)((g10 % 10 + 10) % 10),
+                         (int)(drop_rate_dpm() + 0.5f), lv);
+            }
             if (report_send(frame)) {
                 printf("[NET] 已发送: %s", frame);
             }
