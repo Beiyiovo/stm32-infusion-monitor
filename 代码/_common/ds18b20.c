@@ -14,6 +14,11 @@
  *      0xBE = 读暂存器（前 2 字节是温度）
  *
  *  ★ 硬件：DQ 通过 4.7kΩ 上拉到 3.3V
+ *
+ *  ★★ 2026-10-27：start/read 全程 __disable_irq() ——
+ *      1-Wire 的时序槽只有 2~65us，红外 EXTI/任何中断一插进来时序就废，
+ *      表现为温度读不到（主页 --.- C）。关中断总时长约 3ms/次，每 1.8s 一次，
+ *      对系统无影响（millis 每周期慢 ~3ms，可忽略）。
  ******************************************************************************
  */
 #include "ds18b20.h"
@@ -117,10 +122,16 @@ static uint8_t ds_read_byte(void)
 
 uint8_t ds18b20_start(void)
 {
-    if (!ds_reset()) return 0;
-    ds_write_byte(0xCC);        /* 跳过 ROM */
-    ds_write_byte(0x44);        /* 启动转换 */
-    return 1;
+    uint8_t ok;
+
+    __disable_irq();            /* ★ 时序保护：见文件头 2026-10-27 注 */
+    ok = ds_reset();
+    if (ok) {
+        ds_write_byte(0xCC);    /* 跳过 ROM */
+        ds_write_byte(0x44);    /* 启动转换 */
+    }
+    __enable_irq();
+    return ok;
 }
 
 /* ==================== 读温度（×10） ==================== */
@@ -131,13 +142,18 @@ int16_t ds18b20_read(void)
     int16_t  raw;
     int32_t  t10;
 
-    if (!ds_reset()) return DS18B20_ERR;
+    __disable_irq();            /* ★ 时序保护：见文件头 2026-10-27 注 */
+    if (!ds_reset()) {
+        __enable_irq();
+        return DS18B20_ERR;
+    }
 
     ds_write_byte(0xCC);        /* 跳过 ROM */
     ds_write_byte(0xBE);        /* 读暂存器 */
 
     buf[0] = ds_read_byte();    /* 温度低字节 */
     buf[1] = ds_read_byte();    /* 温度高字节 */
+    __enable_irq();
 
     raw = (int16_t)(((uint16_t)buf[1] << 8) | buf[0]);
 
