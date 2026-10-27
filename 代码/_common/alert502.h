@@ -37,6 +37,8 @@
 #define R_TEMP_LOW      0x02    /* 温度过低 */
 #define R_WEIGHT_LOW    0x04    /* 药液将尽 */
 #define R_RATE_FAST     0x08    /* 滴速过快 */
+#define R_WEIGHT_HIGH   0x10    /* 重量异常偏高（进阶预警，只黄不红） */
+#define R_RATE_SLOW     0x20    /* 滴速过慢（进阶预警，只黄不红） */
 
 /* 默认阈值 */
 #define TH_TEMP_WARN    415     /* ×10 → 41.5℃ */
@@ -46,6 +48,10 @@
 #define TH_A_WEIGHT     50      /* 克：低于此值报警 */
 #define TH_RATE_HIGH    120     /* 滴/分：高于此值报警 */
 
+/* ★ 2026-10-27 进阶阈值（K3 长按进设置2 调节）——只做黄色预警，不触发红色/蜂鸣 */
+#define TH_W_HIGH       0       /* 克：高于此值预警；0=关闭（默认关） */
+#define TH_RATE_LOW     0       /* 滴/分：低于此值预警；0=关闭（默认关） */
+
 /* ★ 2026-10-27：报警蜂鸣改为「3 声短促哔」（原来持续响 3 秒，用户反馈太吵） */
 #define AL_BEEP_ON_MS   120     /* 每声长度 ms */
 #define AL_BEEP_OFF_MS  120     /* 声与声之间的间隔 ms */
@@ -53,9 +59,11 @@
 
 typedef struct {
     int16_t temp_warn, temp_alarm;   /* ×10 */
-    int16_t temp_low;                /* ×10 */
+    int16_t temp_low;                /* ×10（进阶页可调，默认 32.0℃） */
     int16_t w_warn,   w_alarm;       /* 克 */
     int16_t rate_high;               /* 滴/分 */
+    int16_t w_high;                  /* 克：重量上限，0=关（进阶预警） */
+    int16_t rate_low;                /* 滴/分：滴速下限，0=关（进阶预警） */
 } alert_cfg_t;
 
 void     alert502_init(void);

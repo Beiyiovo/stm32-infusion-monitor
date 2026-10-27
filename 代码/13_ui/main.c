@@ -32,9 +32,11 @@
 #define UI_RUN      0
 #define UI_PANEL    1
 #define UI_SET      2
+#define UI_SET2     3               /* ★ 2026-10-27：进阶阈值页（运行页 K3 长按进入） */
 
 static uint8_t s_ui = UI_RUN;
 static uint8_t s_set_idx = 0;
+static uint8_t s_set2_idx = 0;
 
 static int16_t  s_temp10 = 0;
 static uint8_t  s_temp_ok = 0;
@@ -92,6 +94,8 @@ static const char *reason_text(uint8_t r)
     if (r & R_WEIGHT_LOW)  return "药液将尽";
     if (r & R_RATE_FAST)   return "滴速过快";
     if (r & R_TEMP_LOW)    return "温度过低";
+    if (r & R_WEIGHT_HIGH) return "重量异常";
+    if (r & R_RATE_SLOW)   return "滴速过慢";
     return "";
 }
 
@@ -193,6 +197,41 @@ static void draw_set(void)
     }
 }
 
+/* ★ 2026-10-27：进阶阈值页（运行页 K3 长按 2 秒进入）
+ *   温度下限 / 重量上限 / 滴速下限 —— 只影响黄色预警，不触发红色报警/蜂鸣 */
+static void draw_set2(void)
+{
+    alert_cfg_t *c = alert502_cfg();
+    char buf[24];
+    uint8_t i;
+    const int16_t *vals[3] = { &c->temp_low, &c->w_high, &c->rate_low };
+
+    oled_clear();
+    oled_draw_cn(0, 0, "设置");
+    oled_draw_str(32, 0, "2");
+    oled_draw_str(78, 0, "K2- K4+");
+
+    for (i = 0; i < 3; i++) {
+        uint8_t page = (uint8_t)(2 + i * 2);
+
+        oled_draw_str(0, page, (s_set2_idx == i) ? ">" : " ");
+
+        if (i == 0) {
+            oled_draw_cn(12, page, "温度下限");
+            snprintf(buf, sizeof(buf), "%2d.%dC", (*vals[0]) / 10, (*vals[0]) % 10);
+        } else if (i == 1) {
+            oled_draw_cn(12, page, "重量上限");
+            if (*vals[1] > 0) snprintf(buf, sizeof(buf), "%4d g", (*vals[1]));
+            else              snprintf(buf, sizeof(buf), " ---- ");   /* 0 = 关闭 */
+        } else {
+            oled_draw_cn(12, page, "滴速下限");
+            if (*vals[2] > 0) snprintf(buf, sizeof(buf), "%4d  ", (*vals[2]));
+            else              snprintf(buf, sizeof(buf), " ---- ");   /* 0 = 关闭 */
+        }
+        oled_draw_str(84, (uint8_t)(page + 1), buf);
+    }
+}
+
 static void set_next(void)
 {
     s_set_idx = (uint8_t)((s_set_idx + 1) % 3);
@@ -245,6 +284,57 @@ static void set_inc(void)
     printf("[SET] temp=%d w=%d rate=%d\r\n", c->temp_alarm, c->w_alarm, c->rate_high);
 }
 
+/* ============ 进阶阈值（只黄色预警，与常规设置不冲突） ============ */
+static void set2_next(void)
+{
+    s_set2_idx = (uint8_t)((s_set2_idx + 1) % 3);
+    printf("[SET2] next idx=%d\r\n", s_set2_idx);
+}
+
+static void set2_inc(void)
+{
+    alert_cfg_t *c = alert502_cfg();
+
+    switch (s_set2_idx) {
+    case 0:     /* 温度下限 25.0~38.0℃，步进 0.5℃ */
+        c->temp_low = (int16_t)(c->temp_low + 5);
+        if (c->temp_low > 380) c->temp_low = 250;
+        break;
+    case 1:     /* 重量上限 0=关，50~1000g，步进 50g */
+        c->w_high = (int16_t)(c->w_high + 50);
+        if (c->w_high > 1000) c->w_high = 0;
+        break;
+    default:    /* 滴速下限 0=关，10~100 滴/分，步进 10 */
+        c->rate_low = (int16_t)(c->rate_low + 10);
+        if (c->rate_low > 100) c->rate_low = 0;
+        break;
+    }
+    printf("[SET2] temp_low=%d w_high=%d rate_low=%d\r\n",
+           c->temp_low, c->w_high, c->rate_low);
+}
+
+static void set2_dec(void)
+{
+    alert_cfg_t *c = alert502_cfg();
+
+    switch (s_set2_idx) {
+    case 0:
+        c->temp_low = (int16_t)(c->temp_low - 5);
+        if (c->temp_low < 250) c->temp_low = 380;
+        break;
+    case 1:
+        c->w_high = (int16_t)(c->w_high - 50);
+        if (c->w_high < 0) c->w_high = 1000;
+        break;
+    default:
+        c->rate_low = (int16_t)(c->rate_low - 10);
+        if (c->rate_low < 0) c->rate_low = 100;
+        break;
+    }
+    printf("[SET2] temp_low=%d w_high=%d rate_low=%d\r\n",
+           c->temp_low, c->w_high, c->rate_low);
+}
+
 static void handle_keys(void)
 {
     uint8_t k  = key_any_just_pressed();
@@ -260,6 +350,23 @@ static void handle_keys(void)
         }
     } else {
         s_k3_held = 0;
+    }
+
+    /* --- ★ 2026-10-27：运行页 K3 改「松手判定」——短按进常规设置，长按 2 秒进进阶设置 --- */
+    if (s_ui == UI_RUN) {
+        uint8_t e3 = key_get_event(3);
+        if (e3 == 1) {
+            s_ui = UI_SET;
+            s_set_idx = 0;
+            printf("[UI] 进入设置\r\n");
+            return;
+        }
+        if (e3 == 2) {
+            s_ui = UI_SET2;
+            s_set2_idx = 0;
+            printf("[UI] 进入进阶设置（温度下限/重量上限/滴速下限）\r\n");
+            return;
+        }
     }
 
     /* KEY4：短按=设置里 +1；长按=去皮（事件码由 app502 给出：1 短 / 2 长） */
@@ -284,6 +391,10 @@ static void handle_keys(void)
             set_dec();
             return;
         }
+        if (s_ui == UI_SET2) {         /* 进阶设置里 K2 = 减 */
+            set2_dec();
+            return;
+        }
         if (alert502_is_muted()) {
             alert502_mute(0);
             printf("[UI] 取消静音\r\n");
@@ -297,16 +408,22 @@ static void handle_keys(void)
     if (k == 3) {
         if (s_ui == UI_SET) {
             set_next();
-        } else {
-            s_ui = UI_SET;
-            s_set_idx = 0;
-            printf("[UI] 进入设置\r\n");
+            return;
         }
+        if (s_ui == UI_SET2) {
+            set2_next();
+            return;
+        }
+        /* 运行页 K3 改为「松手判定」（见上面 key_get_event），按下时不做事 */
         return;
     }
 
-    if (e4 == 1 && s_ui == UI_SET) {
-        set_inc();
+    if (e4 == 1) {
+        if (s_ui == UI_SET) {
+            set_inc();
+        } else if (s_ui == UI_SET2) {
+            set2_inc();
+        }
     }
 }
 
@@ -452,7 +569,8 @@ int main(void)
             s_t_draw = millis();
             if (s_ui == UI_RUN)        draw_run();
             else if (s_ui == UI_PANEL) draw_panel();
-            else                       draw_set();
+            else if (s_ui == UI_SET)   draw_set();
+            else                       draw_set2();
         }
         if ((millis() - s_t_page) >= 40) {
             s_t_page = millis();

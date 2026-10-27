@@ -12,7 +12,8 @@
 
 static alert_cfg_t s_cfg = {
     TH_TEMP_WARN, TH_TEMP_ALARM, TH_TEMP_LOW,
-    TH_W_WEIGHT, TH_A_WEIGHT, TH_RATE_HIGH
+    TH_W_WEIGHT, TH_A_WEIGHT, TH_RATE_HIGH,
+    TH_W_HIGH, TH_RATE_LOW
 };
 
 static uint8_t  s_level  = AL_OK;
@@ -44,6 +45,8 @@ void alert502_defaults(void)
     s_cfg.w_warn     = TH_W_WEIGHT;
     s_cfg.w_alarm    = TH_A_WEIGHT;
     s_cfg.rate_high  = TH_RATE_HIGH;
+    s_cfg.w_high     = TH_W_HIGH;
+    s_cfg.rate_low   = TH_RATE_LOW;
 }
 
 alert_cfg_t *alert502_cfg(void) { return &s_cfg; }
@@ -118,6 +121,17 @@ uint8_t alert502_update(int16_t temp10, uint8_t t_valid,
     if (d_valid && dpm >= (uint16_t)s_cfg.rate_high) {
         lv = AL_ALARM;
         rs |= R_RATE_FAST;
+    }
+
+    /* --- ★ 进阶预警（2026-10-27）：只黄色提示，不红不响，与常规报警不冲突 ---
+     *     重量上限 / 滴速下限默认 0 = 关闭；温度下限原本就有（默认 32.0℃） */
+    if (w_valid && s_cfg.w_high > 0 && grams > s_cfg.w_high) {
+        if (lv < AL_WARN) lv = AL_WARN;
+        rs |= R_WEIGHT_HIGH;
+    }
+    if (d_valid && s_cfg.rate_low > 0 && dpm < (uint16_t)s_cfg.rate_low) {
+        if (lv < AL_WARN) lv = AL_WARN;
+        rs |= R_RATE_SLOW;
     }
 
     /* --- 蜂鸣器"重新武装"：从正常/预警 进入 报警 的那一刻开始计时 --- */
