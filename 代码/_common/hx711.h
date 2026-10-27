@@ -30,6 +30,7 @@ uint8_t hx711_ready(void);                  /* 1 = 有数据可读 */
 int32_t hx711_read_raw(void);               /* 读原始值；超时返回 HX711_ERR */
 
 int32_t hx711_tare(uint16_t samples);       /* 去皮：采 N 次求平均作为零点，返回零点值 */
+void    hx711_set_offset(int32_t offset);   /* ★ 直接写入零点（11_calib 标定完喂给驱动用） */
 void    hx711_set_scale(float g_per_count); /* 设置换算系数 */
 float   hx711_get_scale(void);
 float   hx711_grams(int32_t raw);           /* 原始值 → 克（已减零点） */

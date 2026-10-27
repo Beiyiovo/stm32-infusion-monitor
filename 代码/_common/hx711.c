@@ -132,6 +132,15 @@ void hx711_set_scale(float g_per_count)
 float hx711_get_scale(void)  { return s_scale; }
 int32_t hx711_get_offset(void) { return s_offset; }
 
+/* ★ 2026-10-27 新增：外部直接写入零点。
+ *   11_calib 用自己的平均流程算零点，算完必须喂给驱动——
+ *   否则 hx711_grams() 里的 s_offset 还是 0，W 显示会变成 raw/scale
+ *   （100 g 放上去显示 ≈1130 g 的假数）。 */
+void hx711_set_offset(int32_t offset)
+{
+    s_offset = offset;
+}
+
 float hx711_grams(int32_t raw)
 {
     if (raw == HX711_ERR) return 0.0f;

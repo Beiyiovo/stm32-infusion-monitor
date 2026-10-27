@@ -20,6 +20,10 @@
  *
  *  ★ 2026-10-27：主循环改非阻塞采样（原来阻塞等 HX711 ~100ms/圈，按键特别不灵敏）；
  *    平均样本 20→15（约 1.5 秒/次）。
+ *  ★ 2026-10-27 二次修复：
+ *    · W 显示 bug——本程序自己算的零点没喂给 hx711 驱动（驱动内零点一直是 0），
+ *      导致 W = raw/K，放 100g 显示 ≈1130g 假数。已加 hx711_set_offset() 喂进去。
+ *    · 整屏 I2C 刷新（每 200ms 阻塞 ~100ms，按键被吞）改逐页刷新。
  *
  *  ★ 为什么不用买"称重显示模块"：一个传感器只能接一个 HX711，
  *    带显示的成品是独立一套，跟本电路不能共用；本固件已经能显示标定结果。
@@ -78,12 +82,14 @@ static void draw(void)
     }
 
     oled_draw_str(0, 7, "K1:ZERO K4:CAL");
-    oled_refresh();
+    /* ★ 2026-10-27：不再整屏刷新（阻塞 ~100ms，按键全被吞），改主循环逐页刷 */
 }
 
 int main(void)
 {
     uint32_t t_draw = 0;
+    uint32_t t_page = 0;
+    uint8_t  page   = 0;
 
     bsp_init();
     app502_init();
@@ -110,7 +116,8 @@ int main(void)
         if (k == 1) {
             printf("[CAL] 采零点中（空载，别碰）...\r\n");
             s_offset = avg_raw(15);
-            printf("[CAL] ★ ZERO = %ld\r\n", (long)s_offset);
+            hx711_set_offset(s_offset);     /* ★ 喂给驱动：否则 W 显示不减零点 */
+            printf("[CAL] ★ ZERO = %ld（已喂给驱动）\r\n", (long)s_offset);
             if (s_zero_prev != 0 && (s_offset - s_zero_prev > 100000 || s_zero_prev - s_offset > 100000)) {
                 printf("[CAL] !! 警告：零点比上次差了 %ld counts\r\n",
                        (long)(s_offset - s_zero_prev));
@@ -157,10 +164,17 @@ int main(void)
             if (r != HX711_ERR) s_raw = r;
         }
 
-        /* --- 屏幕 200ms 刷一次 --- */
+        /* --- 屏幕内容 200ms 重画一次（只写内存缓冲，不碰 I2C） --- */
         if ((millis() - t_draw) >= 200) {
             t_draw = millis();
             draw();
+        }
+
+        /* --- ★ 逐页刷新：每 40ms 只发 1/8 屏（原来整屏一次 ~100ms，把按键全吞了） --- */
+        if ((millis() - t_page) >= 40) {
+            t_page = millis();
+            oled_refresh_page(page);
+            page = (uint8_t)((page + 1) & 7);
         }
 
         delay_ms(5);
