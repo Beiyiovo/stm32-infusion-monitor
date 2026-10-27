@@ -87,6 +87,12 @@ void led_onboard(int on);                   /* 板载 LED，1=亮 */
 void led_red(int on);                       /* 红色 LED，1=亮 */
 void buzzer(int on);                        /* 蜂鸣器，1=响（★ 低电平触发） */
 
+/* ⚠️ 下面三个 xxx_pressed() 是 key_get_event() 的包装，
+ *   ★ 它们会【消费】事件（返回 1 的同时把事件清零）。
+ *   所以同一轮里【不能】既调 key3_pressed() 又调 key_get_event(3)——
+ *   后一次必然拿到 0。2026-10-27 的「K3 按了没反应」就是这个坑
+ *   （main.c 里先 key3_pressed() 判设置界面，再 key_get_event(3) 判主页，
+ *    结果主页那次永远读到 0）。需要多处使用时请只读一次存进变量。*/
 uint8_t key1_pressed(void);
 uint8_t key_get_event(uint8_t idx);
 uint8_t key_any_just_pressed(void);         /* ★ 刚按下的键号（1/2/3），0=无 */         /* ★ 按键事件：0=无 1=短按 2=长按 */

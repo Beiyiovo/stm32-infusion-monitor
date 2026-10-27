@@ -85,8 +85,6 @@ static uint8_t  s_ir_seen = 0;
 static uint32_t s_t_conv = 0, s_t_send = 0, s_t_draw = 0, s_t_page = 0;
 static uint8_t  s_converting = 0, s_page = 0;
 
-static uint32_t s_k3_down = 0;
-static uint8_t  s_k3_held = 0;
 
 static const char *reason_text(uint8_t r)
 {
@@ -338,33 +336,44 @@ static void set2_dec(void)
 static void handle_keys(void)
 {
     uint8_t k  = key_any_just_pressed();
+    /* ★★★ 2026-10-27 修复「K3 短按/长按全都没反应」
+     *
+     * 【根因】key_get_event() 是「只报一次」的接口：返回事件的同一时刻
+     *   就把 s_keys[i].press_ms 清零。原来本函数第一句写的是
+     *       if (key3_pressed() && s_ui == UI_SET)
+     *   而 key3_pressed() 内部就是 key_get_event(3) != 0 ——
+     *   → K3 的事件在【第一句】就被吃掉了；
+     *   → 后面 UI_RUN 那一块再调 key_get_event(3) 永远返回 0，
+     *     所以主页按 K3 短按、长按都没有任何反应（事件已被消费）。
+     *
+     * 【修法】本函数里 K3 只读一次，存进 e3，全篇复用。*/
+    uint8_t e3 = key_get_event(3);
     uint8_t e4 = key4_event();
 
-    if (key3_pressed() && s_ui == UI_SET) {
-        if (!s_k3_held) { s_k3_held = 1; s_k3_down = millis(); }
-        else if ((millis() - s_k3_down) >= 3000) {
-            s_k3_held = 0;
-            alert502_defaults();
-            printf("[SET] 已恢复默认阈值\r\n");
-            buzzer(1); delay_ms(80); buzzer(0);
-        }
-    } else {
-        s_k3_held = 0;
-    }
-
-    /* --- ★ 2026-10-27：运行页 K3 改「松手判定」——短按进常规设置，长按 2 秒进进阶设置 --- */
-    if (s_ui == UI_RUN) {
-        uint8_t e3 = key_get_event(3);
-        if (e3 == 1) {
-            s_ui = UI_SET;
-            s_set_idx = 0;
-            printf("[UI] 进入设置\r\n");
+    /* ---- K3 松手事件：1 = 短按(<2s)，2 = 长按(≥2s) ---- */
+    if (e3) {
+        if (s_ui == UI_RUN) {
+            if (e3 == 1) {
+                s_ui = UI_SET;  s_set_idx = 0;
+                printf("[UI] 进入设置\r\n");
+            } else {
+                s_ui = UI_SET2; s_set2_idx = 0;
+                printf("[UI] 进入进阶设置（温度下限/重量上限/滴速下限）\r\n");
+            }
             return;
         }
-        if (e3 == 2) {
-            s_ui = UI_SET2;
-            s_set2_idx = 0;
-            printf("[UI] 进入进阶设置（温度下限/重量上限/滴速下限）\r\n");
+        if (s_ui == UI_SET) {
+            if (e3 == 1) { set_next(); return; }        /* 短按：下一项 */
+            alert502_defaults();                        /* 长按 2 秒：恢复默认 */
+            printf("[SET] 已恢复默认阈值\r\n");
+            buzzer(1); delay_ms(80); buzzer(0);
+            return;
+        }
+        if (s_ui == UI_SET2) {
+            if (e3 == 1) { set2_next(); return; }
+            alert502_defaults();
+            printf("[SET2] 已恢复默认阈值\r\n");
+            buzzer(1); delay_ms(80); buzzer(0);
             return;
         }
     }
@@ -406,15 +415,8 @@ static void handle_keys(void)
     }
 
     if (k == 3) {
-        if (s_ui == UI_SET) {
-            set_next();
-            return;
-        }
-        if (s_ui == UI_SET2) {
-            set2_next();
-            return;
-        }
-        /* 运行页 K3 改为「松手判定」（见上面 key_get_event），按下时不做事 */
+        /* K3 的动作全部走上面的松手事件 e3，按下这一拍不做事。
+         * （原来这里还调 set_next()，会在长按时先推进一格再恢复默认，动作打架）*/
         return;
     }
 
