@@ -29,5 +29,6 @@ void     drop_tick(void);               /* ★ 主循环必须周期性调用（
 uint16_t drop_window_drops(void);       /* 当前窗口内已计滴数 */
 float    drop_rate_dpm(void);           /* 最近一个完整窗口的 滴/分 */
 uint32_t drop_total(void);              /* 上电以来的累计滴数 */
+uint8_t  drop_level(void);              /* 当前 OUT 电平（1=高）；开机自检/在线监测用 */
 
 #endif /* __DROP_H */

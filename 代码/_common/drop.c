@@ -104,3 +104,12 @@ void drop_reset(void)
 uint16_t drop_window_drops(void) { return s_win_drops; }
 float    drop_rate_dpm(void)     { return s_rate; }
 uint32_t drop_total(void)        { return s_total; }
+
+/* ==================== 电平读取（2026-10-27 新增） ====================
+ * ★ 给整机判断「模块在不在」用：
+ *   PB12 是上拉输入，模块没接时恒为高；接好且光路导通时通常为低。
+ *   所以只要读到一次低电平，就能确定模块在线（不用等第一滴）。 */
+uint8_t drop_level(void)
+{
+    return (GPIO_ReadInputDataBit(IR_GPIO, IR_PIN) ? 1 : 0);
+}

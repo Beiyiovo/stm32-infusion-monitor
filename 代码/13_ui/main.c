@@ -10,7 +10,13 @@
  *
  *  红色报警：温度>=42.0 / 重量<50g / 滴速>=120
  *  黄色预警：温度 41.5~42.0 / 温度<32.0 / 重量 50~100g
- *  蜂鸣器：进入报警响 3 秒后自停；滴速过快时红灯 4Hz 快闪
+ *  蜂鸣器：进入报警响 3 声短促哔后自停；滴速过快时红灯 4Hz 快闪
+ *
+ *  ★ 2026-10-27 v2.1：
+ *    · 开机提示改为「滴两声 + 灯亮 1.5 秒」（原 3 秒长响太吵）
+ *    · 报警蜂鸣改为 3 声短促哔（原 3 秒长响太吵）
+ *    · 称重改 10Hz 非阻塞采样 + 15 点去极值中均值滤波（原 1.8s 才采一个、5 点平均）
+ *    · 红外模块开机自检 + 运行时电平监测（原来要数到第一滴才显示已接）
  ******************************************************************************
  */
 #include "bsp.h"
@@ -33,24 +39,39 @@ static uint8_t s_set_idx = 0;
 static int16_t  s_temp10 = 0;
 static uint8_t  s_temp_ok = 0;
 static int32_t  s_raw = 0;
-static int32_t  s_raw_f = 0;            /* 5 点滑动平均后的原始值 */
+static int32_t  s_raw_f = 0;            /* 去极值中均值滤波后的原始值 */
+static uint32_t s_t_hx = 0;             /* 最近一次成功采样的时刻（掉线看门狗） */
 
-#define RAW_AVG_N   5
+#define RAW_AVG_N   15                  /* 滤波窗口：15 个样本 ≈ 1.5 秒（10Hz 采样） */
+#define RAW_TRIM    3                   /* 排序后每端去掉 3 个极值，中间 9 个取平均 */
 static int32_t  s_raw_buf[RAW_AVG_N];
 static uint8_t  s_raw_i = 0, s_raw_n = 0;
 
-/* 原始值滑动平均：HX711 单次读数噪声较大，平均后零点更稳 */
+/* ★ 2026-10-27：去极值中均值（trimmed mean）滤波
+ *   HX711 单点读数偶发毛刺（磕碰/电磁干扰），纯平均会被拉偏；
+ *   排序后去掉两端极值再平均，毛刺被完全剔除，随机噪声降到约 1/3。
+ *   均值不变 → 不影响标定系数。 */
 static int32_t raw_smooth(int32_t v)
 {
-    int32_t sum = 0;
-    uint8_t i;
+    int32_t tmp[RAW_AVG_N];
+    int32_t t, sum = 0;
+    uint8_t i, j;
 
     s_raw_buf[s_raw_i] = v;
     s_raw_i = (uint8_t)((s_raw_i + 1) % RAW_AVG_N);
     if (s_raw_n < RAW_AVG_N) s_raw_n++;
 
-    for (i = 0; i < s_raw_n; i++) sum += s_raw_buf[i];
-    return s_raw_n ? (sum / s_raw_n) : v;
+    for (i = 0; i < s_raw_n; i++) tmp[i] = s_raw_buf[i];
+    for (i = 0; i + 1 < s_raw_n; i++)                   /* 插入排序（n 小，够快） */
+        for (j = (uint8_t)(i + 1); j < s_raw_n; j++)
+            if (tmp[j] < tmp[i]) { t = tmp[i]; tmp[i] = tmp[j]; tmp[j] = t; }
+
+    {
+        uint8_t trim = (uint8_t)(RAW_TRIM < (s_raw_n / 3) ? RAW_TRIM : (s_raw_n / 3));
+        uint8_t hi  = (uint8_t)(s_raw_n - trim);
+        for (i = trim; i < hi; i++) sum += tmp[i];
+        return (int32_t)(sum / (hi - trim));
+    }
 }
 static int16_t  s_grams = 0;
 static uint8_t  s_hx_ok = 0;
@@ -297,12 +318,19 @@ static void boot_screen(void)
     oled_draw_cn(0, 0, "开机自检");
     oled_refresh();
 
-    /* 上电提示：蜂鸣器响 3 秒，红黄灯同时亮 3 秒 */
+    /* ★ 2026-10-27：上电提示改为「滴滴两声 + 红黄灯亮 1.5 秒」（原来响 3 秒太吵）。
+     *   这 1.5 秒顺便做红外模块自检：上拉输入下读不到低电平 ≈ 模块没接好 */
     led_red(1);
     led_yellow(1);
-    buzzer(1);
-    delay_ms(3000);
-    buzzer(0);
+    buzzer(1);  delay_ms(80);   buzzer(0);  delay_ms(120);
+    buzzer(1);  delay_ms(80);   buzzer(0);
+    {
+        uint8_t i;
+        for (i = 0; i < 20; i++) {
+            if (drop_level() == 0) s_ir_seen = 1;   /* 读到低 = 模块在线 */
+            delay_ms(60);
+        }
+    }
     led_red(0);
     led_yellow(0);
 
@@ -317,9 +345,14 @@ static void boot_screen(void)
 
     /* ★ 上电自动去皮：否则 offset=0 时重量会显示 raw/scale（比如 764.8 g） */
     if (s_hx_ok) {
-        hx711_tare(50);
+        uint8_t k;
+        hx711_tare(20);
         s_raw = hx711_read_raw();
-        { uint8_t k; for (k = 0; k < RAW_AVG_N; k++) s_raw_f = raw_smooth(hx711_read_raw()); }
+        for (k = 0; k < RAW_AVG_N; k++) {
+            int32_t r = hx711_read_raw();
+            if (r != HX711_ERR) s_raw_f = raw_smooth(r);   /* 坏值不进滤波器 */
+        }
+        s_t_hx = millis();
         printf("[HX] 上电自动去皮，offset=%ld\r\n", (long)hx711_get_offset());
     }
 
@@ -335,7 +368,7 @@ static void boot_screen(void)
     oled_draw_cn(40, 6, s_net_ok ? "通过" : "未连");
     oled_refresh();
 
-    printf("[BOOT] TEMP=%d HX711=%d NET=%d\r\n", s_temp_ok, s_hx_ok, s_net_ok);
+    printf("[BOOT] TEMP=%d HX711=%d IR=%d NET=%d\r\n", s_temp_ok, s_hx_ok, s_ir_seen, s_net_ok);
     delay_ms(1500);
 }
 
@@ -367,6 +400,12 @@ int main(void)
         drop_tick();
         report_poll();
         if (drop_total() > 0) s_ir_seen = 1;
+        /* ★ 2026-10-27：运行时也盯着 OUT 电平 —— 模块预热后拉低、线被碰一下都算在线，
+         *   不再非要等到第一滴才把「未接」翻过来 */
+        if (!s_ir_seen && drop_level() == 0) {
+            s_ir_seen = 1;
+            printf("[IR] 检测到红外模块（OUT=低）\r\n");
+        }
 
         if (!s_converting && (millis() - s_t_conv) >= 1000) {
             ds18b20_start();
@@ -378,18 +417,28 @@ int main(void)
 
             s_temp10 = ds18b20_read();
             s_temp_ok = (s_temp10 != DS18B20_ERR && s_temp10 != 850) ? 1 : 0;
+        }
 
-            s_raw = hx711_read_raw();
-            s_hx_ok = (s_raw != HX711_ERR) ? 1 : 0;
-            if (s_hx_ok) {
+        /* ★ 2026-10-27：称重改 10Hz 非阻塞采样 —— HX711 每 100ms 出一个新样本，
+         *   就绪就读一个进滤波器（原来 1.8 秒才采一个、5 点平均拖 7 秒，又迟钝又毛糙） */
+        if (hx711_ready()) {
+            int32_t r = hx711_read_raw();
+            if (r != HX711_ERR) {
                 int32_t g10;
-                s_raw_f = raw_smooth(s_raw);
+                s_raw = r;
+                s_t_hx = millis();
+                s_hx_ok = 1;
+                s_raw_f = raw_smooth(r);
                 g10 = hx711_grams_x10(s_raw_f);
-                /* 死区：±3 g 以内当作 0，避免静止时数字乱跳 */
-                if (g10 > -30 && g10 < 30) g10 = 0;
+                /* 死区：±2 g 以内当作 0，避免静止时数字乱跳 */
+                if (g10 > -20 && g10 < 20) g10 = 0;
                 s_grams = (int16_t)(g10 / 10);
             }
-
+        }
+        /* HX711 掉线看门狗：3 秒没有新样本 → 标记未接 */
+        if (s_hx_ok && (millis() - s_t_hx) > 3000) {
+            s_hx_ok = 0;
+            printf("[HX] 3 秒无新数据，标记称重未接\r\n");
         }
 
         /* 告警执行必须每轮跑：LED 闪烁/蜂鸣器计时都在里面 */

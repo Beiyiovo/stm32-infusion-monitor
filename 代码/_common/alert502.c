@@ -3,7 +3,8 @@
  *  alert502.c —— 分级告警实现
  ******************************************************************************
  *  输出优先级：红色 > 黄色 > 正常
- *  蜂鸣器：进入报警时响 AL_BEEP_MS(3s) 后自停；消音期间不响；解除后重新武装
+ *  蜂鸣器：进入报警时响 3 声短促哔后自停（2026-10-27 由 3 秒长响改短促）；
+ *          消音期间不响；解除后重新武装
  ******************************************************************************
  */
 #include "alert502.h"
@@ -19,9 +20,13 @@ static uint8_t  s_reason = 0;
 static uint8_t  s_was_alarm = 0;        /* 上一轮是否处于报警（用于"重新武装"蜂鸣器） */
 
 static uint32_t s_mute_until = 0;
-static uint32_t s_beep_until = 0;
 static uint32_t s_blink_t    = 0;
 static uint8_t  s_blink_on   = 0;
+
+/* ★ 2026-10-27：报警蜂鸣改为「N 声短促哔」状态机（原来是持续响 3 秒，太吵） */
+static uint8_t  s_beep_left  = 0;       /* 剩余待响声数 */
+static uint8_t  s_beep_on    = 0;       /* 当前这一声是响还是停 */
+static uint32_t s_beep_t     = 0;       /* 当前状态的起始时刻 */
 
 /* ==================== 初始化 ==================== */
 void alert502_init(void)
@@ -46,7 +51,8 @@ alert_cfg_t *alert502_cfg(void) { return &s_cfg; }
 void alert502_mute(uint32_t ms)
 {
     s_mute_until = millis() + ms;
-    s_beep_until = 0;                   /* 消音同时掐掉正在响的蜂鸣器 */
+    s_beep_left  = 0;                   /* 消音同时掐掉还没响完的蜂鸣 */
+    s_beep_on    = 0;
     buzzer(0);
 }
 
@@ -58,7 +64,8 @@ uint8_t alert502_is_muted(void)
 void alert502_clear(void)
 {
     s_was_alarm = 0;
-    s_beep_until = 0;
+    s_beep_left = 0;
+    s_beep_on   = 0;
     s_level = AL_OK;
     s_reason = 0;
     buzzer(0);
@@ -116,7 +123,9 @@ uint8_t alert502_update(int16_t temp10, uint8_t t_valid,
     /* --- 蜂鸣器"重新武装"：从正常/预警 进入 报警 的那一刻开始计时 --- */
     if (lv == AL_ALARM && !s_was_alarm) {
         if (!alert502_is_muted()) {
-            s_beep_until = millis() + AL_BEEP_MS;
+            s_beep_left = AL_BEEP_COUNT;    /* 重新武装：3 声短促哔 */
+            s_beep_on   = 1;
+            s_beep_t    = millis();
         }
     }
     s_was_alarm = (lv == AL_ALARM) ? 1 : 0;
@@ -133,11 +142,22 @@ uint8_t alert502_update(int16_t temp10, uint8_t t_valid,
         blink_update((rs & R_RATE_FAST) ? 125 : 250, &s_blink_on);
         led_red(s_blink_on);
 
-        /* 蜂鸣器：到点自停 */
-        if (s_beep_until && millis() < s_beep_until && !alert502_is_muted()) {
+        /* 蜂鸣器：3 声短促哔，响完自停 */
+        if (s_beep_left == 0 || alert502_is_muted()) {
+            buzzer(0);
+        } else if (s_beep_on) {
             buzzer(1);
+            if ((millis() - s_beep_t) >= AL_BEEP_ON_MS) {
+                s_beep_left--;
+                s_beep_on = 0;
+                s_beep_t  = millis();
+            }
         } else {
             buzzer(0);
+            if ((millis() - s_beep_t) >= AL_BEEP_OFF_MS) {
+                s_beep_on = 1;
+                s_beep_t  = millis();
+            }
         }
         break;
 
@@ -150,7 +170,8 @@ uint8_t alert502_update(int16_t temp10, uint8_t t_valid,
 
     default:
         s_blink_on   = 0;
-        s_beep_until = 0;
+        s_beep_left  = 0;
+        s_beep_on    = 0;
         led_red(0);
         led_yellow(0);
         buzzer(0);

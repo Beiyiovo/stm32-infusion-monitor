@@ -17,7 +17,7 @@
  *  输出行为：
  *      AL_OK     ：红灭、黄灭、蜂鸣器静音
  *      AL_WARN   ：黄灯 1Hz 慢闪，蜂鸣器不响（只做视觉提示）
- *      AL_ALARM  ：红灯 2Hz 闪 + 蜂鸣器【响 3 秒后自停】，红灯继续闪
+ *      AL_ALARM  ：红灯 2Hz 闪 + 蜂鸣器【3 声短促哔后自停】，红灯继续闪
  *      滴速过快   ：红灯 4Hz 快闪（区别于普通报警的 2Hz）
  *
  *  ⚠️ 阈值是"设计值"，不是医学标准；答辩时按课题要求说明来源。
@@ -46,7 +46,10 @@
 #define TH_A_WEIGHT     50      /* 克：低于此值报警 */
 #define TH_RATE_HIGH    120     /* 滴/分：高于此值报警 */
 
-#define AL_BEEP_MS      3000    /* 触发报警时蜂鸣器响多久 */
+/* ★ 2026-10-27：报警蜂鸣改为「3 声短促哔」（原来持续响 3 秒，用户反馈太吵） */
+#define AL_BEEP_ON_MS   120     /* 每声长度 ms */
+#define AL_BEEP_OFF_MS  120     /* 声与声之间的间隔 ms */
+#define AL_BEEP_COUNT   3       /* 声数（想改 4 声改这里） */
 
 typedef struct {
     int16_t temp_warn, temp_alarm;   /* ×10 */

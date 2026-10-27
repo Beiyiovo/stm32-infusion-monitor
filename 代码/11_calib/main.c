@@ -18,6 +18,9 @@
  *      CAL:   100 g
  *      K:     1012.34 c/g
  *
+ *  ★ 2026-10-27：主循环改非阻塞采样（原来阻塞等 HX711 ~100ms/圈，按键特别不灵敏）；
+ *    平均样本 20→15（约 1.5 秒/次）。
+ *
  *  ★ 为什么不用买"称重显示模块"：一个传感器只能接一个 HX711，
  *    带显示的成品是独立一套，跟本电路不能共用；本固件已经能显示标定结果。
  ******************************************************************************
@@ -42,9 +45,8 @@ static int32_t avg_raw(uint16_t n)
     int32_t  r;
 
     for (i = 0; i < n; i++) {
-        r = hx711_read_raw();
+        r = hx711_read_raw();   /* 读函数自带等待，出来就是新样本 */
         if (r != HX711_ERR) { sum += r; ok++; }
-        delay_ms(40);
     }
     if (!ok) return 0;
     return sum / (int32_t)ok;
@@ -98,17 +100,16 @@ int main(void)
     oled_clear();
 
     while (1) {
-        uint8_t k;
-
-        s_raw = hx711_read_raw();
-
-        /* ★ 只读一次：key_any_just_pressed() 读后即清，调两次会丢掉第二个键 */
-        k = key_any_just_pressed();
+        /* ★ 2026-10-27 重排：先扫键，HX711 就绪才读（非阻塞）。
+         *   原来每圈阻塞等 HX711 出数（~100ms），按键采样太稀 → 按起来特别不灵敏。
+         *   ★ key_any_just_pressed() 读后即清，每圈只调一次 */
+        uint8_t k  = key_any_just_pressed();
+        uint8_t e4 = key4_event();
 
         /* --- KEY1：定零点 --- */
         if (k == 1) {
             printf("[CAL] 采零点中（空载，别碰）...\r\n");
-            s_offset = avg_raw(20);
+            s_offset = avg_raw(15);
             printf("[CAL] ★ ZERO = %ld\r\n", (long)s_offset);
             if (s_zero_prev != 0 && (s_offset - s_zero_prev > 100000 || s_zero_prev - s_offset > 100000)) {
                 printf("[CAL] !! 警告：零点比上次差了 %ld counts\r\n",
@@ -128,12 +129,10 @@ int main(void)
         }
 
         /* --- KEY4：定换算系数（短按 1 / 长按 2 都接受） --- */
-        {
-            uint8_t e4 = key4_event();
-            if (e4 != 0) {
+        if (e4 != 0) {
                 int32_t a;
                 printf("[KEY] KEY4 事件=%u\r\n", e4);
-                a = avg_raw(20);
+                a = avg_raw(15);
             if (s_scale == 0.0f && s_offset == 0) {
                 printf("[CAL] 提示：还没定零点，先按 KEY1\r\n");
             }
@@ -151,6 +150,11 @@ int main(void)
                 buzzer(1); delay_ms(120); buzzer(0);
                 }
             }
+
+        /* --- 采样：HX711 就绪才读（非阻塞），主循环 ~10ms 一圈，按键不丢 --- */
+        if (hx711_ready()) {
+            int32_t r = hx711_read_raw();
+            if (r != HX711_ERR) s_raw = r;
         }
 
         /* --- 屏幕 200ms 刷一次 --- */
@@ -159,6 +163,6 @@ int main(void)
             draw();
         }
 
-        delay_ms(20);
+        delay_ms(5);
     }
 }

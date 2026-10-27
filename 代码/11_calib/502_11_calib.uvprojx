@@ -419,7 +419,7 @@
               <FileType>1</FileType>
               <FilePath>..\_common\cnfont.c</FilePath>
             </File>
-            </Files>
+          </Files>
         </Group>
         <Group>
           <GroupName>::CMSIS</GroupName>

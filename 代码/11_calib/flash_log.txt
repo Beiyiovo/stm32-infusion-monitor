@@ -1,0 +1,4 @@
+Load "T:\\AS\\毕业设计\\毕业设计2\\代码\\11_calib\\Objects\\502_11_calib.axf" 
+No ST-LINK detected
+Error: Flash Download failed  -  Target DLL has been cancelled
+Flash Load finished at 22:37:13

@@ -6,6 +6,8 @@
  *    1) DOUT 必须等它变低（就绪）再移数据，读的时候不能超时死等
  *    2) 一定要发第 25 个脉冲，否则下一次掉到别的通道/增益
  *    3) 零点（offset）与换算系数（scale）必须实测标定，默认值只是占位
+ *    4) 2026-10-27：去皮改「去极值平均」（排序去两端极值再平均），抗单点毛刺；
+ *       去掉样本间的额外延时（read_raw 本身就等新样本），20 个样本 ≈ 2 秒
  ******************************************************************************
  */
 #include "hx711.h"
@@ -80,28 +82,43 @@ int32_t hx711_read_raw(void)
     return v;
 }
 
+/* ==================== 去极值平均（2026-10-27 新增） ====================
+ * 排序后去掉两端各 trim 个，剩下的取平均。
+ * 手碰秤盘、电磁毛刺这类单点离谱值会被直接扔掉，零点不再被拉偏。 */
+static int32_t trimmed_avg(int32_t *buf, uint16_t n, uint16_t trim)
+{
+    int32_t  t;
+    uint16_t i, j;
+    int32_t  sum = 0;
+
+    for (i = 0; i + 1 < n; i++)                 /* 插入排序（n≤24，够快） */
+        for (j = (uint16_t)(i + 1); j < n; j++)
+            if (buf[j] < buf[i]) { t = buf[i]; buf[i] = buf[j]; buf[j] = t; }
+
+    for (i = trim; i < (uint16_t)(n - trim); i++) sum += buf[i];
+    return (int32_t)(sum / (int32_t)(n - 2 * trim));
+}
+
 /* ==================== 去皮 ==================== */
 int32_t hx711_tare(uint16_t samples)
 {
-    int32_t  sum = 0;
-    uint16_t n   = 0;
+    int32_t  buf[24];
+    uint16_t n = 0;
     uint16_t i;
     int32_t  r;
 
     if (samples == 0) samples = 10;
+    if (samples > 24) samples = 24;
 
     for (i = 0; i < samples; i++) {
-        r = hx711_read_raw();
-        if (r != HX711_ERR) {
-            sum += r;
-            n++;
-        }
-        delay_ms(10);
+        r = hx711_read_raw();       /* 读函数自带等待，出来就是新样本 */
+        if (r != HX711_ERR) buf[n++] = r;
     }
 
-    if (n > 0) {
-        s_offset = sum / (int32_t)n;
-    }
+    if (n >= 10)      s_offset = trimmed_avg(buf, n, 3);
+    else if (n >= 5)  s_offset = trimmed_avg(buf, n, 1);
+    else if (n > 0)   s_offset = trimmed_avg(buf, n, 0);
+
     return s_offset;
 }
 
