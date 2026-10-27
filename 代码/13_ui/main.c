@@ -296,9 +296,9 @@ static void set2_inc(void)
     alert_cfg_t *c = alert502_cfg();
 
     switch (s_set2_idx) {
-    case 0:     /* 温度下限 25.0~38.0℃，步进 0.5℃ */
+    case 0:     /* 温度下限 15.0~38.0℃，步进 0.5℃（默认 20.0℃，调高才容易报） */
         c->temp_low = (int16_t)(c->temp_low + 5);
-        if (c->temp_low > 380) c->temp_low = 250;
+        if (c->temp_low > 380) c->temp_low = 150;
         break;
     case 1:     /* 重量上限 0=关，50~1000g，步进 50g */
         c->w_high = (int16_t)(c->w_high + 50);
@@ -320,7 +320,7 @@ static void set2_dec(void)
     switch (s_set2_idx) {
     case 0:
         c->temp_low = (int16_t)(c->temp_low - 5);
-        if (c->temp_low < 250) c->temp_low = 380;
+        if (c->temp_low < 150) c->temp_low = 380;
         break;
     case 1:
         c->w_high = (int16_t)(c->w_high - 50);
