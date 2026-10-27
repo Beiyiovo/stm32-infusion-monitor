@@ -1,0 +1,2 @@
+Load "T:\\AS\\毕业设计\\毕业设计2\\代码\\13_ui\\Objects\\502_13_ui.axf" 
+Erase Done.Programming Done.Verify OK.Flash Load finished at 22:53:25
