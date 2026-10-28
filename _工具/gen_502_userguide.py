@@ -127,7 +127,7 @@ def build():
               [3.0, 11.0, 3.0], font_pt=8.5, first_col_bold=True,
               aligns=['left', 'left', 'center'])
 
-    h2(doc, '5.2 共享代码（「代码\_common」目录，被各工程共同引用）')
+    h2(doc, '5.2 共享代码（「代码/_common」目录，被各工程共同引用）')
     add_table(doc, ['文件', '干什么'],
               [('bsp.c / bsp.h', '时钟、延时、millis、按键 1~3 扫描与事件、蜂鸣器、红灯'),
                ('app502.c / app502.h', '黄灯、KEY4 消抖与短/长按事件'),
